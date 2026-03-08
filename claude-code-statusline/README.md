@@ -3,7 +3,7 @@
 A lightweight Python script that adds a real-time context window usage indicator to [Claude Code](https://docs.anthropic.com/en/docs/claude-code)'s status line.
 
 ```
- ai-toolbox | main | Opus 4.6 | ████████░░░░░░░░░░░░ 42% 65.5k/156.0k | $0.34 | 12m | 0x compact | 5 files | a1b2c3d4
+ ai-toolbox | main +42 -17 | Opus 4.6 | ████████░░░░░░░░░░░░ 42% 65.5k/156.0k | $0.34 | 12m | 0x compact | 5 files | 0 err | a1b2c3d4
 ```
 
 ## Features
@@ -13,6 +13,9 @@ A lightweight Python script that adds a real-time context window usage indicator
 - **Session duration** — how long since the first message
 - **Compact count** — how many times auto-compaction has fired
 - **Working files** — number of unique files Claude has read or edited
+- **Git diff stats** — `+lines -lines` changed in the working tree
+- **Tool errors** — count of failed tool calls this session
+- **Sub-agent count** — number of spawned sub-agents (shown when > 0)
 - **Model name**, **git branch**, and **session ID**
 
 ## Why?

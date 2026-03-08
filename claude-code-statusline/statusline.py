@@ -3,7 +3,8 @@
 Claude Code Status Line — Context Window Monitor
 
 Displays real-time context window usage, model info, git branch,
-session cost, duration, compact count, and working file count.
+session cost, duration, compact count, working file count,
+git diff stats, and tool error rate.
 
 Usage:
     Configure in .claude/settings.local.json:
@@ -19,6 +20,7 @@ Reads JSON from stdin (provided by Claude Code) containing session data.
 
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime
 
@@ -65,6 +67,36 @@ def get_git_branch():
         return ""
 
 
+def get_git_diff_stat():
+    """Get git working tree diff stats (+added/-deleted lines)."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--shortstat"],
+            capture_output=True, text=True, timeout=3
+        )
+        stat = result.stdout.strip()
+        if not stat:
+            return ""
+
+        insertions = 0
+        deletions = 0
+        for part in stat.split(","):
+            part = part.strip()
+            if "insertion" in part:
+                insertions = int(part.split()[0])
+            elif "deletion" in part:
+                deletions = int(part.split()[0])
+
+        parts = []
+        if insertions:
+            parts.append(f"{GREEN}+{insertions}{RESET}")
+        if deletions:
+            parts.append(f"{RED}-{deletions}{RESET}")
+        return " ".join(parts) if parts else ""
+    except Exception:
+        return ""
+
+
 def get_model_pricing(model_id):
     """Get pricing for a model, falling back to sonnet rates."""
     for key, pricing in MODEL_PRICING.items():
@@ -74,15 +106,7 @@ def get_model_pricing(model_id):
 
 
 def parse_transcript(transcript_path):
-    """Parse transcript file to extract all session metrics.
-
-    Returns a dict with:
-        context_tokens: current context window usage
-        total_cost: estimated session cost in USD
-        compact_count: number of auto-compactions
-        files_touched: set of files read or edited
-        session_start: timestamp of first entry
-    """
+    """Parse transcript file to extract all session metrics."""
     result = {
         "context_tokens": 0,
         "input_tokens_total": 0,
@@ -91,6 +115,9 @@ def parse_transcript(transcript_path):
         "compact_count": 0,
         "files_touched": set(),
         "session_start": None,
+        "tool_calls": 0,
+        "tool_errors": 0,
+        "subagent_count": 0,
     }
 
     try:
@@ -99,8 +126,8 @@ def parse_transcript(transcript_path):
     except (FileNotFoundError, PermissionError):
         return result
 
+    # Reverse pass — find most recent context usage
     context_found = False
-
     for line in reversed(lines):
         line = line.strip()
         if not line:
@@ -110,7 +137,6 @@ def parse_transcript(transcript_path):
         except json.JSONDecodeError:
             continue
 
-        # Context tokens — from the most recent assistant response
         if (
             not context_found
             and obj.get("type") == "assistant"
@@ -127,8 +153,10 @@ def parse_transcript(transcript_path):
             if all(k in usage for k in keys):
                 result["context_tokens"] = sum(usage[k] for k in keys)
                 context_found = True
+                break
 
-    # Forward pass for cumulative metrics
+    # Forward pass — cumulative metrics
+    active_subagents = set()
     for line in lines:
         line = line.strip()
         if not line:
@@ -138,11 +166,11 @@ def parse_transcript(transcript_path):
         except json.JSONDecodeError:
             continue
 
-        # Session start — timestamp of the first entry
+        # Session start
         if result["session_start"] is None and "timestamp" in obj:
             result["session_start"] = obj["timestamp"]
 
-        # Accumulate token usage across all assistant responses for cost
+        # Token usage for cost
         if (
             obj.get("type") == "assistant"
             and "message" in obj
@@ -155,11 +183,11 @@ def parse_transcript(transcript_path):
             )
             result["output_tokens_total"] += usage.get("output_tokens", 0)
 
-        # Compact count — look for summary/compaction markers
+        # Compact count
         if obj.get("type") == "summary":
             result["compact_count"] += 1
 
-        # Files touched — extract from tool use
+        # Tool calls, errors, files, and subagents from assistant messages
         if obj.get("type") == "assistant" and "message" in obj:
             content = obj["message"].get("content", [])
             if isinstance(content, list):
@@ -167,11 +195,34 @@ def parse_transcript(transcript_path):
                     if not isinstance(block, dict):
                         continue
                     if block.get("type") == "tool_use":
+                        result["tool_calls"] += 1
                         inp = block.get("input", {})
-                        # Read, Edit, Write, MultiEdit tools
+                        tool_name = block.get("name", "")
+
+                        # Files touched
                         for key in ("file_path", "path"):
                             if key in inp and isinstance(inp[key], str):
                                 result["files_touched"].add(inp[key])
+
+                        # Sub-agent tracking
+                        if tool_name in ("Task", "Agent"):
+                            task_id = block.get("id", "")
+                            if task_id:
+                                active_subagents.add(task_id)
+
+        # Tool errors from user messages (tool_result blocks)
+        if obj.get("type") == "user" and "message" in obj:
+            content = obj["message"].get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if (
+                        isinstance(block, dict)
+                        and block.get("type") == "tool_result"
+                        and block.get("is_error")
+                    ):
+                        result["tool_errors"] += 1
+
+    result["subagent_count"] = len(active_subagents)
 
     return result
 
@@ -197,7 +248,6 @@ def format_duration(start_timestamp):
     if not start_timestamp:
         return "0m"
     try:
-        # Handle ISO format timestamps
         start_str = start_timestamp.replace("Z", "+00:00")
         start = datetime.fromisoformat(start_str)
         now = datetime.now(start.tzinfo)
@@ -207,7 +257,7 @@ def format_duration(start_timestamp):
             return f"{total_minutes}m"
         hours = total_minutes // 60
         minutes = total_minutes % 60
-        return f"{hours}h{minutes:02d}m"
+        return f"{hours}h {minutes:02d}m"
     except Exception:
         return "?m"
 
@@ -264,9 +314,27 @@ def main():
     # Session duration
     duration_str = format_duration(metrics["session_start"])
 
-    # Git branch
+    # Git branch + diff
     branch = get_git_branch()
-    branch_part = f" {GRAY}|{RESET} {GREEN}{branch}{RESET}" if branch else ""
+    diff_stat = get_git_diff_stat()
+    branch_part = ""
+    if branch:
+        branch_part = f" {GRAY}|{RESET} {GREEN}{branch}{RESET}"
+        if diff_stat:
+            branch_part += f" {diff_stat}"
+
+    # Error rate
+    error_part = ""
+    if metrics["tool_errors"] > 0:
+        err_color = RED if metrics["tool_errors"] > 5 else ORANGE
+        error_part = f"{err_color}{metrics['tool_errors']}{RESET} err"
+    else:
+        error_part = f"{GREEN}0{RESET} err"
+
+    # Sub-agents
+    subagent_part = ""
+    if metrics["subagent_count"] > 0:
+        subagent_part = f"{CYAN}{metrics['subagent_count']}{RESET} agents"
 
     sep = f" {GRAY}|{RESET} "
     parts = [
@@ -277,8 +345,13 @@ def main():
         f"{WHITE}{duration_str}{RESET}",
         f"{CYAN}{metrics['compact_count']}{RESET}x compact",
         f"{CYAN}{len(metrics['files_touched'])}{RESET} files",
-        f"{GRAY}{session_id}{RESET}",
+        error_part,
     ]
+
+    if subagent_part:
+        parts.append(subagent_part)
+
+    parts.append(f"{GRAY}{session_id}{RESET}")
 
     print(f" {sep.join(parts)}")
 
