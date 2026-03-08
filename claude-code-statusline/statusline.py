@@ -123,6 +123,7 @@ def parse_transcript(transcript_path):
         "tool_calls": 0,
         "tool_errors": 0,
         "subagent_count": 0,
+        "turn_count": 0,
     }
 
     try:
@@ -183,6 +184,18 @@ def parse_transcript(transcript_path):
         # Session start
         if result["session_start"] is None and "timestamp" in obj:
             result["session_start"] = obj["timestamp"]
+
+        # Turn count (each user message = one turn)
+        if obj.get("type") == "user" and "message" in obj:
+            content = obj["message"].get("content", [])
+            # Only count turns with actual user text, not just tool results
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        result["turn_count"] += 1
+                        break
+            elif isinstance(content, str) and content.strip():
+                result["turn_count"] += 1
 
         # Token usage for cost
         if (
@@ -337,12 +350,28 @@ def main():
     diff_stat = get_git_diff_stat()
     branch_part = ""
     if branch:
-        branch_part = f" {GRAY}|{RESET} {GREEN}{branch}{RESET}"
+        branch_part = f"{GREEN}{branch}{RESET}"
         if diff_stat:
             branch_part += f" {diff_stat}"
 
+    # Cache hit ratio
+    total_input = (
+        metrics["input_tokens_total"] + metrics["cache_read_tokens_total"]
+    )
+    if total_input > 0:
+        cache_ratio = metrics["cache_read_tokens_total"] / total_input
+        cache_pct = int(cache_ratio * 100)
+        if cache_pct >= 70:
+            cache_color = GREEN
+        elif cache_pct >= 40:
+            cache_color = YELLOW
+        else:
+            cache_color = ORANGE
+        cache_part = f"{cache_color}{cache_pct}%{RESET} cache"
+    else:
+        cache_part = f"{GRAY}0%{RESET} cache"
+
     # Error rate
-    error_part = ""
     if metrics["tool_errors"] > 0:
         err_color = RED if metrics["tool_errors"] > 5 else ORANGE
         error_part = f"{err_color}{metrics['tool_errors']}{RESET} err"
@@ -354,24 +383,41 @@ def main():
     if metrics["subagent_count"] > 0:
         subagent_part = f"{CYAN}{metrics['subagent_count']}{RESET} agents"
 
+    # Cost per turn
+    cost_per_turn = ""
+    if metrics["turn_count"] > 0:
+        cpt = cost / metrics["turn_count"]
+        cost_per_turn = f"{GRAY}~{format_cost(cpt)}/turn{RESET}"
+
     sep = f" {GRAY}|{RESET} "
-    parts = [
-        f"{WHITE}{cwd}{RESET}{branch_part}",
+
+    # Line 1: session essentials
+    line1_parts = [
         f"{BOLD}{MAGENTA}{model}{RESET}",
         f"{bar} {CYAN}{tokens_str}{RESET}/{GRAY}{limit_str}{RESET}",
         f"{YELLOW}{cost_str}{RESET}",
         f"{WHITE}{duration_str}{RESET}",
         f"{CYAN}{metrics['compact_count']}{RESET}x compact",
-        f"{CYAN}{len(metrics['files_touched'])}{RESET} files",
-        error_part,
+        f"{GRAY}{session_id}{RESET}",
     ]
 
+    # Line 2: project context
+    line2_parts = [f"{WHITE}{cwd}{RESET}"]
+    if branch_part:
+        line2_parts.append(branch_part)
+    line2_parts.extend([
+        f"{CYAN}{metrics['turn_count']}{RESET} turns",
+        f"{CYAN}{len(metrics['files_touched'])}{RESET} files",
+        error_part,
+        cache_part,
+    ])
+    if cost_per_turn:
+        line2_parts.append(cost_per_turn)
     if subagent_part:
-        parts.append(subagent_part)
+        line2_parts.append(subagent_part)
 
-    parts.append(f"{GRAY}{session_id}{RESET}")
-
-    print(f" {sep.join(parts)}")
+    print(f" {sep.join(line1_parts)}")
+    print(f" {sep.join(line2_parts)}")
 
 
 if __name__ == "__main__":
