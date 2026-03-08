@@ -16,6 +16,7 @@ Real-time status bar for Claude Code. Single-file script.
 - Reads session JSON from stdin (provided by Claude Code's `statusLine` feature)
 - Parses the transcript JSONL file for token usage, compaction events, tool calls, errors, turns, cache ratio, and thinking blocks
 - Three-line layout: line 1 (session core + sparkline), line 2 (project telemetry), line 3 (live tool trace + file edits)
+- Matrix binary rain animation on the left (3×7 grid, true RGB colors: `#003B00`, `#03A062`, `#00FF41`)
 - Compaction entries use `{"type": "system", "subtype": "compact_boundary"}` in transcript JSONL
 - Thinking blocks use `{"type": "thinking"}` in assistant message content (token counts redacted)
 

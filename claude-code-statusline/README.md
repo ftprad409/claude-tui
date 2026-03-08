@@ -3,13 +3,14 @@
 A lightweight Python script that adds a real-time context window usage indicator to [Claude Code](https://docs.anthropic.com/en/docs/claude-code)'s status line.
 
 ```
- Opus 4.6 │ ████████░░░░░░░░░░░░ 42% 65.5k/200.0k │ ▁▂▃▅▆▇█▃▄▅ │ $2.34 │ 12m │ 0x compact │ #a1b2c3d4
- ai-toolbox │ main +42 -17 │ t:18 │ f:5 │ err:0 │ cache:82% │ think:4 │ ~$0.13/turn │ agents:1
- r»statusline.py>e»statusline.py>b»python3>e»README.md │ statusline.py×3 README.md×1
+ 0110100 Opus 4.6 │ ████████░░░░░░░░░░░░ 42% 65.5k/200.0k │ ▁▂▃▅▆▇█▃▄▅ │ $2.34 │ 12m │ 0x compact │ #a1b2c3d4
+ 1001011 ai-toolbox │ main +42 -17 │ t:18 │ f:5 │ err:0 │ cache:82% │ think:4 │ ~$0.13/turn
+ 0110010 r»statusline.py>e»statusline.py>b»python3>e»README.md │ statusline.py×3 README.md×1
 ```
 
-Three-line layout:
+Three-line layout with Matrix binary rain animation on the left:
 
+- **Matrix rain** — animated 3×7 binary rain with true RGB Matrix colors (`#003B00` dark trail, `#03A062` classic green, `#00FF41` bright phosphor). Each character keeps its color as it falls down. Advances one frame per tool call.
 - **Line 1** — session core: model, context bar, sparkline, cost, duration, compactions, session ID
 - **Line 2** — project telemetry: directory, git branch + diff, turns, files, errors, cache ratio, thinking count, cost/turn, agents
 - **Line 3** — live activity trace: recent tool calls (`r»read`, `e»edit`, `b»bash`) and file edit counts (shown only during active turns)
@@ -30,6 +31,7 @@ Three-line layout:
 - **Tool errors** — count of failed tool calls this session
 - **Sub-agent count** — number of spawned sub-agents (shown when > 0)
 - **Live activity trace** — last 6 tool calls with file targets, plus edit counts per file this turn
+- **Matrix rain animation** — binary rain with true RGB Matrix palette, animated per tool call
 - **Model name**, **git branch**, and **session ID**
 
 ## Why?

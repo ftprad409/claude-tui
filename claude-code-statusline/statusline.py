@@ -56,6 +56,31 @@ MAGENTA = "\033[95m"
 WHITE = "\033[97m"
 GRAY = "\033[90m"
 
+# Matrix rain animation (3 rows × 7 cols, 16 frames)
+# Color is tied to each character's rain position — follows it as it falls
+_RAIN = "10110010011101001011100101100110100"
+_COL_SPEEDS = [1, 3, 2, 1, 2, 3, 1]
+# Matrix color palette (true RGB)
+_MATRIX_DARK = "\033[38;2;0;59;0m"      # #003B00 — fading trail
+_MATRIX_MID = "\033[38;2;3;160;98m"      # #03A062 — classic matrix
+_MATRIX_BRIGHT = "\033[38;2;0;255;65m"   # #00FF41 — vibrant phosphor
+_CHAR_COLORS = [_MATRIX_DARK, _MATRIX_DARK, _MATRIX_MID, _MATRIX_MID,
+                _MATRIX_BRIGHT]
+ANIM_FRAMES = []
+for _f in range(16):
+    _rows = []
+    for _r in range(3):
+        _line = []
+        for _c in range(7):
+            # Character falls down: same idx appears at lower rows
+            # in later frames, keeping its color
+            _idx = _c * 5 + _r - _f * _COL_SPEEDS[_c]
+            _ch = _RAIN[_idx % len(_RAIN)]
+            _color = _CHAR_COLORS[_idx % len(_CHAR_COLORS)]
+            _line.append(f"{_color}{_ch}{RESET}")
+        _rows.append("".join(_line))
+    ANIM_FRAMES.append(_rows)
+
 
 def get_git_branch():
     """Read current git branch from .git/HEAD."""
@@ -546,10 +571,18 @@ def main():
             ))
         line3 = f" {sep.join(parts3)}"
 
-    print(f" {sep.join(line1_parts)}")
-    print(f" {sep.join(line2_parts)}")
-    if line3:
-        print(line3)
+    # Matrix animation frame (advances with each tool call)
+    frame_idx = metrics["tool_calls"] % len(ANIM_FRAMES)
+    mx = ANIM_FRAMES[frame_idx]
+
+    line1_str = f" {sep.join(line1_parts)}"
+    line2_str = f" {sep.join(line2_parts)}"
+    line3_str = line3 if line3 else ""
+
+    # Matrix rain (colors embedded per character)
+    print(f" {mx[0]}{line1_str}")
+    print(f" {mx[1]}{line2_str}")
+    print(f" {mx[2]}{line3_str}")
 
 
 if __name__ == "__main__":
