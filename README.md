@@ -10,8 +10,8 @@ Real-time status bar for Claude Code with context sparkline, session cost, cache
 
 ```
  0110100 Opus 4.6 │ ████████░░░░░░░░░░░░ 42% 65.5k/200.0k │ ▁▂▃▅▆▇█▃▄▅ │ $2.34 │ 12m │ 0x compact │ #a1b2c3d4
- 1001011 ai-toolbox │ main +42 -17 │ t:18 │ f:5 │ err:0 │ cache:82% │ think:4 │ ~$0.13/turn
- 0110010 r»statusline.py>e»statusline.py>b»python3>e»README.md │ statusline.py×3 README.md×1
+ 1001011 ai-toolbox │ main +42 -17 │ 18 turns │ 5 files │ 0 err │ 82% cache │ 4x think │ ~$0.13/turn
+ 0110010 read statusline.py → edit statusline.py → bash python3 → edit README.md │ statusline.py×3 README.md×1
 ```
 
 ### [claude-code-session-stats](./claude-code-session-stats/)

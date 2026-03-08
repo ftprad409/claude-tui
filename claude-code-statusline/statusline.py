@@ -56,30 +56,28 @@ MAGENTA = "\033[95m"
 WHITE = "\033[97m"
 GRAY = "\033[90m"
 
-# Matrix rain animation (3 rows × 7 cols, 16 frames)
-# Color is tied to each character's rain position — follows it as it falls
-_RAIN = "10110010011101001011100101100110100"
-_COL_SPEEDS = [1, 3, 2, 1, 2, 3, 1]
-# Matrix color palette (true RGB)
-_MATRIX_DARK = "\033[38;2;0;59;0m"      # #003B00 — fading trail
-_MATRIX_MID = "\033[38;2;3;160;98m"      # #03A062 — classic matrix
-_MATRIX_BRIGHT = "\033[38;2;0;255;65m"   # #00FF41 — vibrant phosphor
-_CHAR_COLORS = [_MATRIX_DARK, _MATRIX_DARK, _MATRIX_MID, _MATRIX_MID,
-                _MATRIX_BRIGHT]
-ANIM_FRAMES = []
-for _f in range(16):
-    _rows = []
-    for _r in range(3):
-        _line = []
-        for _c in range(7):
-            # Character falls down: same idx appears at lower rows
-            # in later frames, keeping its color
-            _idx = _c * 5 + _r - _f * _COL_SPEEDS[_c]
-            _ch = _RAIN[_idx % len(_RAIN)]
-            _color = _CHAR_COLORS[_idx % len(_CHAR_COLORS)]
-            _line.append(f"{_color}{_ch}{RESET}")
-        _rows.append("".join(_line))
-    ANIM_FRAMES.append(_rows)
+# Widget system — left-side 3-row animation area
+# Select via STATUSLINE_WIDGET env var (default: matrix)
+# Built-in: matrix, bars, progress, none
+# Custom: drop a .py file with a render(frame, ratio) function into widgets/
+WIDGET = os.environ.get("STATUSLINE_WIDGET", "matrix")
+
+
+def _load_widget(name):
+    """Load a widget by name from the widgets/ directory."""
+    if name == "none":
+        return None
+    widgets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "widgets")
+    widget_path = os.path.join(widgets_dir, f"{name}.py")
+    if not os.path.exists(widget_path):
+        return None
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(f"widgets.{name}",
+                                                   widget_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return getattr(mod, "render", None)
 
 
 def get_git_branch():
@@ -533,20 +531,20 @@ def main():
     if branch_part:
         line2_parts.append(branch_part)
     line2_parts.extend([
-        f"{dim}t:{RESET}{CYAN}{metrics['turn_count']}{RESET}",
-        f"{dim}f:{RESET}{CYAN}{len(metrics['files_touched'])}{RESET}",
-        f"{dim}err:{RESET}{error_part.split(' ')[0]}",
-        f"{dim}cache:{RESET}{cache_part.split(' ')[0]}",
+        f"{CYAN}{metrics['turn_count']}{RESET} {dim}turns{RESET}",
+        f"{CYAN}{len(metrics['files_touched'])}{RESET} {dim}files{RESET}",
+        f"{error_part.split(' ')[0]} {dim}err{RESET}",
+        f"{cache_part.split(' ')[0]} {dim}cache{RESET}",
     ])
     if metrics["thinking_count"] > 0:
         line2_parts.append(
-            f"{dim}think:{RESET}{MAGENTA}{metrics['thinking_count']}{RESET}"
+            f"{MAGENTA}{metrics['thinking_count']}{RESET}{dim}x{RESET} {dim}think{RESET}"
         )
     if cost_per_turn:
         line2_parts.append(cost_per_turn)
     if subagent_part:
         line2_parts.append(
-            f"{dim}agents:{RESET}{CYAN}{metrics['subagent_count']}{RESET}"
+            f"{CYAN}{metrics['subagent_count']}{RESET} {dim}agents{RESET}"
         )
 
     # Line 3: live activity trace
@@ -560,10 +558,10 @@ def main():
             for t in recent[-6:]:
                 p = t.split()
                 if len(p) >= 2:
-                    trail.append(f"{dim}{p[0][0].lower()}»{RESET}{GREEN}{p[-1]}{RESET}")
+                    trail.append(f"{dim}{p[0].lower()}{RESET} {GREEN}{p[-1]}{RESET}")
                 else:
-                    trail.append(f"{GREEN}{p[0]}{RESET}")
-            parts3.append(f"{dim}>{RESET}".join(trail))
+                    trail.append(f"{dim}{p[0].lower()}{RESET}")
+            parts3.append(f" {dim}\u2192{RESET} ".join(trail))
         if file_edits:
             top = sorted(file_edits.items(), key=lambda x: -x[1])[:3]
             parts3.append(" ".join(
@@ -571,18 +569,23 @@ def main():
             ))
         line3 = f" {sep.join(parts3)}"
 
-    # Matrix animation frame (advances with each tool call)
-    frame_idx = metrics["tool_calls"] % len(ANIM_FRAMES)
-    mx = ANIM_FRAMES[frame_idx]
+    # Widget animation (advances with each tool call)
+    widget_fn = _load_widget(WIDGET)
 
     line1_str = f" {sep.join(line1_parts)}"
     line2_str = f" {sep.join(line2_parts)}"
     line3_str = line3 if line3 else ""
 
-    # Matrix rain (colors embedded per character)
-    print(f" {mx[0]}{line1_str}")
-    print(f" {mx[1]}{line2_str}")
-    print(f" {mx[2]}{line3_str}")
+    if widget_fn:
+        wdg = widget_fn(frame=metrics["tool_calls"], ratio=ratio)
+        print(f" {wdg[0]}{line1_str}")
+        print(f" {wdg[1]}{line2_str}")
+        print(f" {wdg[2]}{line3_str}")
+    else:
+        print(f"{line1_str}")
+        print(f"{line2_str}")
+        if line3_str:
+            print(f"{line3_str}")
 
 
 if __name__ == "__main__":

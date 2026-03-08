@@ -4,8 +4,8 @@ A lightweight Python script that adds a real-time context window usage indicator
 
 ```
  0110100 Opus 4.6 │ ████████░░░░░░░░░░░░ 42% 65.5k/200.0k │ ▁▂▃▅▆▇█▃▄▅ │ $2.34 │ 12m │ 0x compact │ #a1b2c3d4
- 1001011 ai-toolbox │ main +42 -17 │ t:18 │ f:5 │ err:0 │ cache:82% │ think:4 │ ~$0.13/turn
- 0110010 r»statusline.py>e»statusline.py>b»python3>e»README.md │ statusline.py×3 README.md×1
+ 1001011 ai-toolbox │ main +42 -17 │ 18 turns │ 5 files │ 0 err │ 82% cache │ 4x think │ ~$0.13/turn
+ 0110010 read statusline.py → edit statusline.py → bash python3 → edit README.md │ statusline.py×3 README.md×1
 ```
 
 Three-line layout with Matrix binary rain animation on the left:
@@ -102,6 +102,27 @@ Claude Code passes session metadata as JSON via stdin to status line commands. T
 | Claude Haiku 4.5 | $0.80/M | $0.08/M | $4/M |
 
 Unknown models fall back to Sonnet pricing.
+
+## Widgets
+
+The left-side animation area is pluggable. Set the `STATUSLINE_WIDGET` env var to switch:
+
+| Widget | Description |
+| ------ | ----------- |
+| `matrix` | Binary rain with true RGB Matrix colors (default) |
+| `hex` | Hex rain with true RGB Matrix colors |
+| `bars` | Equalizer bars pulsing in a wave pattern |
+| `progress` | Vertical context usage meter (color matches context bar) |
+| `none` | No widget — just the status lines |
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "STATUSLINE_WIDGET=bars python3 /path/to/statusline.py"
+  }
+}
+```
 
 ## Context bar color thresholds
 
