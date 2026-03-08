@@ -97,6 +97,16 @@ Custom slash commands for deep session analytics on demand. Install to `~/.claud
 /ui:context    Context window analysis — growth curve, compaction timeline, predictions
 ```
 
+### [claude-code-monitor](./claude-code-monitor/)
+
+Live session dashboard for a separate terminal. Live duration, activity status, cost burn rate, tool trace, error details, auto-follow, and interactive hotkeys — all in the alternate screen buffer.
+
+```bash
+python3 claude-code-monitor/monitor.py           # auto-detect active session
+python3 claude-code-monitor/monitor.py --list     # list recent sessions
+# While running: [s] stats  [d] details  [l] sessions  [e] export  [?] help  [q] quit
+```
+
 ### [claude-code-hooks](./claude-code-hooks/)
 
 [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) that provide automatic context about file activity, dependencies, and code churn — right inside Claude Code sessions.

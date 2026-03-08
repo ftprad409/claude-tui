@@ -47,6 +47,15 @@ Custom slash commands for in-session analytics. Markdown files installed to `~/.
 - No external dependencies — commands are pure markdown prompts
 - Transcript path resolved via: `~/.claude/projects/$(pwd | sed 's|/|-|g; s|^-||')/*.jsonl`
 
+### claude-code-monitor
+
+Live session dashboard for a separate terminal. Single-file script.
+
+- Entry point: `claude-code-monitor/monitor.py`
+- Self-contained — all parsing inlined, no imports from other tools
+- Watches transcript file for changes, refreshes every 2 seconds
+- Args: none (auto-detect), `<session-id>`, or `--list`
+
 ### claude-code-hooks
 
 Claude Code hooks for automatic in-session context. Three hook scripts:
