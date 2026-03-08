@@ -9,7 +9,7 @@ A collection of utilities and scripts for working with AI coding assistants.
 Real-time status line for Claude Code showing context usage, session cost, duration, compaction count, file count, git diff stats, and tool error rate.
 
 ```
- project | main +42 -17 | Opus 4.6 | ████████░░░░░░░░░░░░ 42% 65.5k/156.0k | $0.34 | 12m | 0x compact | 5 files | 0 err | a1b2c3d4
+ project | main +42 -17 | Opus 4.6 | ████████░░░░░░░░░░░░ 42% 65.5k/200.0k | $0.34 | 12m | 0x compact | 5 files | 0 err | a1b2c3d4
 ```
 
 ### [claude-code-session-stats](./claude-code-session-stats/)

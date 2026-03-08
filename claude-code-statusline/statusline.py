@@ -24,8 +24,13 @@ import subprocess
 import sys
 from datetime import datetime
 
-# Claude Code triggers /compact at ~78% context utilization
-CONTEXT_LIMIT = int(200_000 * 0.78)
+# Full context window size (200k for Claude models)
+CONTEXT_LIMIT = 200_000
+
+# Overhead multiplier for system prompts, tool definitions, CLAUDE.md, etc.
+# These tokens are part of the context but not reported in usage data.
+# Empirically ~1.2x based on comparing with Claude Code's built-in indicator.
+OVERHEAD_MULTIPLIER = 1.2
 
 # Pricing per million tokens (as of 2025)
 # https://docs.anthropic.com/en/docs/about-claude/models
@@ -297,9 +302,10 @@ def main():
     metrics = parse_transcript(transcript_path)
 
     # Context usage bar
-    ratio = metrics["context_tokens"] / CONTEXT_LIMIT if CONTEXT_LIMIT > 0 else 0
+    estimated_total = metrics["context_tokens"] * OVERHEAD_MULTIPLIER
+    ratio = estimated_total / CONTEXT_LIMIT if CONTEXT_LIMIT > 0 else 0
     bar = build_progress_bar(ratio)
-    tokens_str = format_tokens(metrics["context_tokens"])
+    tokens_str = format_tokens(int(estimated_total))
     limit_str = format_tokens(CONTEXT_LIMIT)
 
     # Session cost
