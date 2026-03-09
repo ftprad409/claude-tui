@@ -458,7 +458,7 @@
       <p>Real-time statusline, live monitor, session analytics, hooks, and slash commands for Claude Code.</p>
       <div class="install-box">
         <span class="prompt">$</span>
-        <code>curl -sSL https://raw.githubusercontent.com/slima4/claudeui/main/install.sh | bash</code>
+        <code>brew tap slima4/claudeui &amp;&amp; brew install claudeui</code>
         <button class="copy-btn" onclick="copyInstall(this)">copy</button>
       </div>
     </div>
@@ -677,7 +677,11 @@
         <div class="quickstart-card">
           <div class="step">Step 1</div>
           <h3>Install</h3>
-          <pre><span class="comment"># One command installs everything</span>
+          <pre><span class="comment"># Homebrew (macOS)</span>
+brew tap slima4/claudeui &amp;&amp; brew install claudeui
+claude-ui-setup
+
+<span class="comment"># Or install script</span>
 curl -sSL https://raw.githubusercontent.com/slima4/claudeui/main/install.sh | bash</pre>
         </div>
         <div class="quickstart-card">
@@ -718,7 +722,7 @@ claude-sessions list</pre>
 
   <script>
     function copyInstall(btn) {
-      const cmd = 'curl -sSL https://raw.githubusercontent.com/slima4/claudeui/main/install.sh | bash';
+      const cmd = 'brew tap slima4/claudeui && brew install claudeui';
       navigator.clipboard.writeText(cmd).then(() => {
         btn.textContent = 'copied!';
         setTimeout(() => btn.textContent = 'copy', 2000);

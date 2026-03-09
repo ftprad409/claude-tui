@@ -6,7 +6,15 @@ A collection of utilities and scripts for working with Claude Code.
 
 ## Install
 
-One command installs everything — statusline, hooks, slash commands, and CLI tools:
+### Homebrew (macOS)
+
+```bash
+brew tap slima4/claudeui
+brew install claudeui
+claude-ui-setup       # configure statusline, hooks, and commands
+```
+
+### Script
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/slima4/claudeui/main/install.sh | bash
