@@ -16,7 +16,7 @@ set -euo pipefail
 #   git clone https://github.com/slima4/claudeui.git && ./claudeui/install.sh
 
 REPO_URL="https://github.com/slima4/claudeui.git"
-INSTALL_DIR="${CLAUDE_UI_HOME:-$HOME/.claude-ui}"
+INSTALL_DIR="${INSTALL_DIR:-${CLAUDE_UI_HOME:-$HOME/.claude-ui}}"
 CLAUDE_DIR="$HOME/.claude"
 SETTINGS_FILE="$CLAUDE_DIR/settings.json"
 COMMANDS_DIR="$CLAUDE_DIR/commands"
