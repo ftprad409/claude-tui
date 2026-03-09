@@ -141,6 +141,7 @@ def parse_transcript(path):
         return r
 
     subagents = set()
+    agent_labels = {}  # tool_use_id -> description
     current_turn = 0
     last_context = 0
 
@@ -212,6 +213,39 @@ def parse_transcript(path):
                         err_msg = r["last_error_msg"] if r["last_error_msg"] else "unknown"
                         r["event_log"].append((ts, f"error: {err_msg}"))
 
+        # Agent results
+        if etype == "user" and "message" in obj:
+            content = obj.get("message", {}).get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if (isinstance(block, dict)
+                            and block.get("type") == "tool_result"
+                            and not block.get("is_error")):
+                        tool_id = block.get("tool_use_id", "")
+                        if tool_id in agent_labels:
+                            label = agent_labels[tool_id]
+                            # Extract first line of agent result as summary
+                            result_text = ""
+                            rc = block.get("content", "")
+                            if isinstance(rc, list):
+                                for rb in rc:
+                                    if isinstance(rb, dict) and rb.get("type") == "text":
+                                        result_text = rb.get("text", "")
+                                        break
+                            elif isinstance(rc, str):
+                                result_text = rc
+                            # Get first meaningful line as summary
+                            summary = ""
+                            for line in result_text.split("\n"):
+                                line = line.strip()
+                                if line and not line.startswith("<") and not line.startswith("agentId:"):
+                                    summary = line[:120]
+                                    break
+                            if summary:
+                                r["event_log"].append((ts, f"agent done: {label} → {summary}"))
+                            else:
+                                r["event_log"].append((ts, f"agent done: {label}"))
+
         # Assistant responses
         if etype == "assistant" and "message" in obj:
             msg = obj["message"]
@@ -235,6 +269,14 @@ def parse_transcript(path):
                                 tid = block.get("id", "")
                                 if tid:
                                     subagents.add(tid)
+                                agent_desc = inp.get("description", "")
+                                agent_type = inp.get("subagent_type", "")
+                                agent_label = agent_desc or agent_type or "subagent"
+                                r["event_log"].append((ts, f"agent: {agent_label}"))
+                                r["recent_tools"].append(f"agent {agent_label}")
+                                if tid:
+                                    agent_labels[tid] = agent_label
+                                continue
                             fp = inp.get("file_path", inp.get("path", ""))
                             # Build tool trace entry + event log
                             if fp:
@@ -741,7 +783,7 @@ def render_help_overlay(term_width):
     return lines
 
 
-FILTER_NAMES = ["all", "errors", "bash", "edits", "search", "compactions"]
+FILTER_NAMES = ["all", "errors", "bash", "edits", "search", "agents", "compactions"]
 
 FILTER_MATCHERS = {
     "all": lambda d: True,
@@ -749,6 +791,7 @@ FILTER_MATCHERS = {
     "bash": lambda d: d.startswith("$"),
     "edits": lambda d: any(w in d for w in ("edit ", "write ")),
     "search": lambda d: any(d.startswith(p) for p in ("grep:", "glob:", "read ")),
+    "agents": lambda d: d.startswith("agent:"),
     "compactions": lambda d: d.startswith("⚡"),
 }
 
