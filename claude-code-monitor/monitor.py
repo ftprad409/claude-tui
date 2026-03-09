@@ -1204,8 +1204,9 @@ def main():
                             cached_body = None
                             needs_full_redraw = True
 
-                # Matrix animates only when Claude is actively working
-                is_active = bool(r and r.get("waiting_for_response"))
+                # Matrix animates when Claude is working or transcript just changed
+                idle = now - last_data_time
+                is_active = bool(r and r.get("waiting_for_response")) or idle < 5
 
                 if needs_full_redraw:
                     matrix_line = render_matrix_header(frame, min(term_width, 80), active=is_active)
