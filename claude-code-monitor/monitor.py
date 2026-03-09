@@ -82,7 +82,7 @@ DIM = "\033[2m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 ORANGE = "\033[38;5;208m"
-RED = "\033[91m"
+RED = "\033[31m"
 CYAN = "\033[96m"
 MAGENTA = "\033[95m"
 WHITE = "\033[97m"
@@ -841,7 +841,7 @@ def show_settings_panel(term_width):
         lines.append(f"  {BOLD}  SETTINGS{RESET}")
         lines.append(f"  {'─' * w}")
         lines.append("")
-        lines.append(f"  {YELLOW}⚠ Changes apply to the next Claude Code session{RESET}")
+        lines.append(f"  {RED}⚠ Changes apply to the next Claude Code session{RESET}")
         lines.append("")
         lines.append(f"  {BOLD}  Compaction{RESET}")
         lines.append(f"  {'─' * w}")
