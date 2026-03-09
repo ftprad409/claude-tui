@@ -64,7 +64,7 @@ No external dependencies — stdlib only.
 ### Option 1: Clone the repository
 
 ```bash
-git clone https://github.com/slima4/ai-toolbox.git
+git clone https://github.com/slima4/claudeui.git
 ```
 
 Add to your Claude Code settings (`.claude/settings.local.json` in your project, or `~/.claude/settings.json` globally):
@@ -73,7 +73,7 @@ Add to your Claude Code settings (`.claude/settings.local.json` in your project,
 {
   "statusLine": {
     "type": "command",
-    "command": "python3 /absolute/path/to/ai-toolbox/claude-code-statusline/statusline.py"
+    "command": "python3 /absolute/path/to/claudeui/claude-code-statusline/statusline.py"
   }
 }
 ```

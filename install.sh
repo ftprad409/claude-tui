@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ── Claude UI Installer ─────────────────────────────────────────────
-# Installs the full ai-toolbox suite for Claude Code:
+# Installs the full claudeui suite for Claude Code:
 #   • Statusline — real-time status bar
 #   • Hooks — file hotspots, dependency warnings, churn alerts
 #   • Commands — /ui:session, /ui:cost, /ui:perf, /ui:context
@@ -11,11 +11,11 @@ set -euo pipefail
 #   • Session Manager — browse, compare, export sessions
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/slima4/ai-toolbox/main/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/slima4/claudeui/main/install.sh | bash
 #   # or
-#   git clone https://github.com/slima4/ai-toolbox.git && ./ai-toolbox/install.sh
+#   git clone https://github.com/slima4/claudeui.git && ./claudeui/install.sh
 
-REPO_URL="https://github.com/slima4/ai-toolbox.git"
+REPO_URL="https://github.com/slima4/claudeui.git"
 INSTALL_DIR="${CLAUDE_UI_HOME:-$HOME/.claude-ui}"
 CLAUDE_DIR="$HOME/.claude"
 SETTINGS_FILE="$CLAUDE_DIR/settings.json"
@@ -261,12 +261,12 @@ step "Installing CLI tools..."
 mkdir -p "$BIN_DIR"
 
 # Create wrapper scripts
-cat > "$BIN_DIR/claude-monitor" << EOF
+cat > "$BIN_DIR/claude-ui-monitor" << EOF
 #!/usr/bin/env bash
 exec python3 "$INSTALL_DIR/claude-code-monitor/monitor.py" "\$@"
 EOF
-chmod +x "$BIN_DIR/claude-monitor"
-ok "claude-monitor"
+chmod +x "$BIN_DIR/claude-ui-monitor"
+ok "claude-ui-monitor"
 
 cat > "$BIN_DIR/claude-stats" << EOF
 #!/usr/bin/env bash
@@ -316,7 +316,7 @@ echo ""
 echo -e "  ${CYAN}Statusline${RESET}      Real-time status bar in Claude Code (${STATUSLINE_MODE} mode)"
 echo -e "  ${CYAN}Hooks${RESET}           File hotspots, dependency warnings, churn alerts"
 echo -e "  ${CYAN}Commands${RESET}        /ui:session  /ui:cost  /ui:perf  /ui:context"
-echo -e "  ${CYAN}Monitor${RESET}         claude-monitor (live dashboard in separate terminal)"
+echo -e "  ${CYAN}Monitor${RESET}         claude-ui-monitor (live dashboard in separate terminal)"
 echo -e "  ${CYAN}Stats${RESET}           claude-stats (post-session analytics)"
 echo -e "  ${CYAN}Sessions${RESET}        claude-sessions (browse, compare, export)"
 echo ""
@@ -326,7 +326,7 @@ echo -e "  ${DIM}# Start Claude Code — statusline and hooks are automatic${RES
 echo -e "  claude"
 echo ""
 echo -e "  ${DIM}# Open a second terminal for the live monitor${RESET}"
-echo -e "  claude-monitor"
+echo -e "  claude-ui-monitor"
 echo ""
 echo -e "  ${DIM}# Inside Claude Code, use slash commands${RESET}"
 echo -e "  /ui:session    ${DIM}# full session report${RESET}"

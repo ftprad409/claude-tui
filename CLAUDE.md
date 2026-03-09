@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AI Toolbox is a collection of standalone utilities for AI coding assistants. Each tool lives in its own subdirectory with its own README.
+ClaudeUI is a collection of standalone utilities for Claude Code. Each tool lives in its own subdirectory with its own README.
 
 ## Tools
 
