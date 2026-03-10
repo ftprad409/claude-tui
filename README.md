@@ -78,7 +78,7 @@ claude-ui-mode custom
 ```
 
 <p align="center">
-  <img src="assets/configurator.png" alt="Statusline Configurator" width="520">
+  <img src="assets/configurator.png" alt="Statusline Configurator" width="600">
 </p>
 
 Or use CLI flags for non-interactive configuration:

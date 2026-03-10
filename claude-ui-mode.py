@@ -137,30 +137,42 @@ def set_mode(mode):
 # ── Config (custom components) ─────────────────────────────────────
 
 
+# (id, line, name, preview_text, color_pair_index)
+# color pairs: 1=green, 2=red, 3=cyan, 4=yellow, 5=magenta, 0=white/default
 COMPONENTS = [
-    ("model",              "line1", "Model",           "Model name"),
-    ("context_bar",        "line1", "Context bar",     "Progress bar"),
-    ("token_count",        "line1", "Token count",     "84.2k/200k"),
-    ("compact_prediction", "line1", "Compact predict", "~12 turns left"),
-    ("sparkline",          "line1", "Sparkline",       "Token sparkline"),
-    ("cost",               "line1", "Cost",            "Session cost"),
-    ("duration",           "line1", "Duration",        "Session duration"),
-    ("compact_count",      "line1", "Compact count",   "2x compact"),
-    ("session_id",         "line1", "Session ID",      "#a1b2c3d4"),
-    ("cwd",                "line2", "Directory",       "Working dir name"),
-    ("git_branch",         "line2", "Git branch",      "Branch + diff stats"),
-    ("turns",              "line2", "Turns",           "Turn count"),
-    ("files",              "line2", "Files",           "Files touched"),
-    ("errors",             "line2", "Errors",          "Error count"),
-    ("cache",              "line2", "Cache %",         "Cache hit ratio"),
-    ("thinking",           "line2", "Thinking",        "Thinking blocks"),
-    ("cost_per_turn",      "line2", "Cost/turn",       "~$0.05/turn"),
-    ("agents",             "line2", "Agents",          "Sub-agent count"),
-    ("tool_trace",         "line3", "Tool trace",      "Recent tool calls"),
-    ("file_edits",         "line3", "File edits",      "File edit summary"),
+    ("model",              "line1", "Model",           "Opus 4.6",                          5),
+    ("context_bar",        "line1", "Context bar",     "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591 42%", 1),
+    ("token_count",        "line1", "Token count",     "65.5k/200.0k",                      3),
+    ("compact_prediction", "line1", "Compact predict", "~24 turns left",                    3),
+    ("sparkline",          "line1", "Sparkline",       "sparkline",                          3),
+    ("cost",               "line1", "Cost",            "$2.34",                              4),
+    ("duration",           "line1", "Duration",        "12m",                                0),
+    ("compact_count",      "line1", "Compact count",   "0x compact",                         3),
+    ("session_id",         "line1", "Session ID",      "#a1b2c3d4",                          0),
+    ("cwd",                "line2", "Directory",       os.path.basename(os.getcwd()),         0),
+    ("git_branch",         "line2", "Git branch",      "main +42 -17",                       3),
+    ("turns",              "line2", "Turns",           "18 turns",                            3),
+    ("files",              "line2", "Files",           "5 files",                             3),
+    ("errors",             "line2", "Errors",          "0 err",                               1),
+    ("cache",              "line2", "Cache %",         "82% cache",                           3),
+    ("thinking",           "line2", "Thinking",        "4x think",                            5),
+    ("cost_per_turn",      "line2", "Cost/turn",       "~$0.13/turn",                         4),
+    ("agents",             "line2", "Agents",          "2 agents",                            3),
+    ("tool_trace",         "line3", "Tool trace",      "read \u2192 edit \u2192 bash \u2192 edit", 0),
+    ("file_edits",         "line3", "File edits",      "statusline.py\u00d73 README.md\u00d71",   0),
 ]
 
 COMPONENT_IDS = {c[0] for c in COMPONENTS}
+
+# Sparkline preview: (char, color_pair) matching statusline.py colors
+# <0.25 green(1), <0.50 cyan(3), <0.75 yellow(4), >=0.75 red(2)
+SPARKLINE_PREVIEW = [
+    ("\u2584", 3), ("\u2581", 1), ("\u2586", 4), ("\u2583", 3),
+    ("\u2581", 1), ("\u2583", 1), ("\u2581", 1), ("\u2585", 3),
+    ("\u2588", 2), ("\u2581", 1), ("\u2581", 1), ("\u2581", 1),
+    ("\u2585", 3), ("\u2583", 3), ("\u2585", 3), ("\u2582", 1),
+    ("\u2581", 1), ("\u2582", 1), ("\u2583", 1), ("\u2581", 1),
+]
 
 WIDGETS = ["matrix", "hex", "bars", "progress", "none"]
 
@@ -215,7 +227,7 @@ def get_widget(custom):
 
 def apply_preset(custom, preset_name):
     preset = PRESETS.get(preset_name, {})
-    for comp_id, line, _, _ in COMPONENTS:
+    for comp_id, line, _, _, _ in COMPONENTS:
         set_toggle(custom, comp_id, line, True)
     for line, overrides in preset.items():
         for comp_id, value in overrides.items():
@@ -224,7 +236,7 @@ def apply_preset(custom, preset_name):
 
 def find_component(name):
     """Find a component by ID. Returns (comp_id, line) or None."""
-    for comp_id, line, _, _ in COMPONENTS:
+    for comp_id, line, _, _, _ in COMPONENTS:
         if comp_id == name:
             return comp_id, line
     return None
@@ -241,14 +253,14 @@ def build_menu():
         "line2": "Line 2 \u2014 Project Telemetry",
         "line3": "Line 3 \u2014 Activity Trace",
     }
-    for i, (comp_id, line, name, desc) in enumerate(COMPONENTS):
+    for i, (comp_id, line, name, preview, color) in enumerate(COMPONENTS):
         if line != current_line:
             items.append({"type": "header", "label": line_labels[line]})
             current_line = line
         items.append({
             "type": "component", "index": i,
             "comp_id": comp_id, "line": line,
-            "name": name, "desc": desc,
+            "name": name, "preview": preview, "color": color,
         })
     items.append({"type": "header", "label": ""})
     items.append({"type": "widget", "label": "Widget"})
@@ -351,6 +363,8 @@ def interactive_curses(custom):
                     enabled = get_toggle(custom, item["comp_id"], item["line"])
                     mark = "\u2713" if enabled else "\u2717"
                     mark_color = curses.color_pair(1) if enabled else curses.color_pair(2)
+                    preview_attr = (curses.color_pair(item["color"]) | curses.A_BOLD
+                                    if enabled else curses.A_DIM)
 
                     try:
                         if is_selected:
@@ -361,7 +375,13 @@ def interactive_curses(custom):
                         stdscr.addstr(mark + " ", mark_color | curses.A_BOLD)
                         stdscr.addstr(f"{item['name']:<18s}",
                                       curses.A_BOLD if is_selected else 0)
-                        stdscr.addstr(item["desc"], curses.A_DIM)
+                        if item["comp_id"] == "sparkline":
+                            for ch, cp in SPARKLINE_PREVIEW:
+                                attr = (curses.color_pair(cp) | curses.A_BOLD
+                                        if enabled else curses.A_DIM)
+                                stdscr.addstr(ch, attr)
+                        else:
+                            stdscr.addstr(item["preview"], preview_attr)
                     except curses.error:
                         pass
                     row += 1
@@ -506,7 +526,7 @@ def print_current(custom):
 
     for line_key in ("line1", "line2", "line3"):
         hidden = [
-            name for cid, ln, name, _ in COMPONENTS
+            name for cid, ln, name, _, _ in COMPONENTS
             if ln == line_key and not get_toggle(custom, cid, ln)
         ]
         if hidden:
@@ -515,7 +535,7 @@ def print_current(custom):
                 print(f"    {RED}\u2717{RESET} {name}")
 
     all_visible = all(
-        get_toggle(custom, cid, ln) for cid, ln, _, _ in COMPONENTS
+        get_toggle(custom, cid, ln) for cid, ln, _, _, _ in COMPONENTS
     )
     if all_visible:
         print(f"  {GREEN}\u2713{RESET} All components visible")
@@ -530,7 +550,7 @@ def parse_component_list(value):
         print(f"  {RED}\u2717{RESET} Unknown component(s): {', '.join(invalid)}")
         print()
         print(f"  {DIM}Available components:{RESET}")
-        for comp_id, _, name, _ in COMPONENTS:
+        for comp_id, _, name, _, _ in COMPONENTS:
             print(f"    {CYAN}{comp_id:<22s}{RESET} {DIM}{name}{RESET}")
         print()
         sys.exit(1)
@@ -553,7 +573,7 @@ def cmd_custom(args):
             print(f"  {DIM}Changes apply on next statusline refresh{RESET}")
 
             hidden = [
-                name for comp_id, line, name, _ in COMPONENTS
+                name for comp_id, line, name, _, _ in COMPONENTS
                 if not get_toggle(custom, comp_id, line)
             ]
             if hidden:
