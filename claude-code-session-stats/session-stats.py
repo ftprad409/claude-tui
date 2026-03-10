@@ -231,7 +231,8 @@ def parse_session(transcript_path):
                         report["files_created"][file_path] += 1
 
         # Compaction events
-        if entry_type == "summary":
+        if (entry_type == "summary" or
+                (entry_type == "system" and obj.get("subtype") == "compact_boundary")):
             report["compact_count"] += 1
             if timestamp:
                 report["compactions"].append(timestamp)

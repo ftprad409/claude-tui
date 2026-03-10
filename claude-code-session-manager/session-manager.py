@@ -153,7 +153,8 @@ def quick_parse(transcript_path):
                 if obj.get("type") == "user" and not obj.get("isMeta"):
                     meta["user_messages"] += 1
 
-                if obj.get("type") == "summary":
+                if (obj.get("type") == "summary" or
+                        (obj.get("type") == "system" and obj.get("subtype") == "compact_boundary")):
                     meta["compact_count"] += 1
 
                 if (
