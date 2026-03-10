@@ -287,6 +287,11 @@ def interactive_curses(custom):
         curses.init_pair(3, curses.COLOR_CYAN, -1)
         curses.init_pair(4, curses.COLOR_YELLOW, -1)
         curses.init_pair(5, curses.COLOR_MAGENTA, -1)
+        # Pair 6: vivid green for logo — use 256-color 46 if available
+        if curses.COLORS >= 256:
+            curses.init_pair(6, 46, -1)
+        else:
+            curses.init_pair(6, curses.COLOR_GREEN, -1)
 
         while True:
             stdscr.erase()
@@ -315,7 +320,7 @@ def interactive_curses(custom):
                 for i, (cl, ui) in enumerate(zip(logo_claude, logo_ui)):
                     stdscr.addstr(1 + i, x, cl, curses.A_BOLD)
                     stdscr.addstr(1 + i, x + len(cl), ui,
-                                  curses.color_pair(1) | curses.A_BOLD)
+                                  curses.color_pair(6) | curses.A_BOLD)
             except curses.error:
                 pass
 

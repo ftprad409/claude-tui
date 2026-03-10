@@ -31,12 +31,17 @@ MAGENTA='\033[95m'
 DIM='\033[2m'
 BOLD='\033[1m'
 RESET='\033[0m'
+LOGO_GREEN='\033[38;5;46m'
 
 print_header() {
     echo ""
-    echo -e "${GREEN}${BOLD}  ╔══════════════════════════════════════╗${RESET}"
-    echo -e "${GREEN}${BOLD}  ║         Claude UI Installer          ║${RESET}"
-    echo -e "${GREEN}${BOLD}  ╚══════════════════════════════════════╝${RESET}"
+    echo -e "  ${BOLD} ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗${LOGO_GREEN}██╗   ██╗██╗${RESET}"
+    echo -e "  ${BOLD}██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝${LOGO_GREEN}██║   ██║██║${RESET}"
+    echo -e "  ${BOLD}██║      ██║     ███████║██║   ██║██║  ██║█████╗  ${LOGO_GREEN}██║   ██║██║${RESET}"
+    echo -e "  ${BOLD}██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  ${LOGO_GREEN}██║   ██║██║${RESET}"
+    echo -e "  ${BOLD}╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗${LOGO_GREEN}╚██████╔╝██║${RESET}"
+    echo -e "  ${BOLD} ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝${LOGO_GREEN} ╚═════╝ ╚═╝${RESET}"
+    echo -e "    ${DIM}Installer${RESET}"
     echo ""
 }
 
@@ -313,9 +318,7 @@ fi
 # ── Summary ──────────────────────────────────────────────────────────
 
 echo ""
-echo -e "${GREEN}${BOLD}  ╔══════════════════════════════════════╗${RESET}"
-echo -e "${GREEN}${BOLD}  ║       Installation Complete!         ║${RESET}"
-echo -e "${GREEN}${BOLD}  ╚══════════════════════════════════════╝${RESET}"
+echo -e "  ${GREEN}${BOLD}✓ Installation Complete!${RESET}"
 echo ""
 echo -e "  ${BOLD}What's installed:${RESET}"
 echo ""

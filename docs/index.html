@@ -113,6 +113,19 @@
       color: var(--green);
     }
 
+    .hero-logo {
+      font-family: var(--mono);
+      font-size: clamp(6px, 1.4vw, 14px);
+      line-height: 1.15;
+      font-weight: 700;
+      margin-bottom: 24px;
+      white-space: pre;
+      display: inline-block;
+    }
+
+    .hero-logo .ui { color: var(--green); }
+
+
     .hero p {
       font-size: 18px;
       color: var(--text-dim);
@@ -454,7 +467,12 @@
   <section class="hero">
     <div class="container">
       <div class="hero-badge">Open Source</div>
-      <h1>Claude<span>UI</span></h1>
+      <h1><div class="hero-logo"> ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗<span class="ui">██╗   ██╗██╗</span>
+██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝<span class="ui">██║   ██║██║</span>
+██║      ██║     ███████║██║   ██║██║  ██║█████╗  <span class="ui">██║   ██║██║</span>
+██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  <span class="ui">██║   ██║██║</span>
+╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗<span class="ui">╚██████╔╝██║</span>
+ ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝<span class="ui"> ╚═════╝ ╚═╝</span></div></h1>
       <p>Real-time statusline, live monitor, session analytics, hooks, and slash commands for Claude Code.</p>
       <div class="install-box">
         <span class="prompt">$</span>

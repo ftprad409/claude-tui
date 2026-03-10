@@ -1,4 +1,6 @@
-# ClaudeUI
+<p align="center">
+  <img src="assets/logo.svg" alt="ClaudeUI" width="620">
+</p>
 
 [![Release](https://img.shields.io/github/v/release/slima4/claudeui)](https://github.com/slima4/claudeui/releases)
 [![Stars](https://img.shields.io/github/stars/slima4/claudeui)](https://github.com/slima4/claudeui/stargazers)
