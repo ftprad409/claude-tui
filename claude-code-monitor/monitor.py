@@ -799,10 +799,25 @@ def render_dashboard(r, idle_secs, just_updated, term_width):
                 lines.append(f"  {indent}{evt_color}{cont}{RESET}")
 
     lines.append("")
-    lines.append(f"  {sep_color}{'─' * w}{RESET}")
-    lines.append(f"  {BOLD}{CYAN}s{RESET}{DIM}tats{RESET}  {BOLD}{CYAN}d{RESET}{DIM}etails{RESET}  {BOLD}{CYAN}l{RESET}{DIM}og{RESET}  {BOLD}{CYAN}e{RESET}{DIM}xport{RESET}  {DIM}sessi{RESET}{BOLD}{CYAN}o{RESET}{DIM}ns{RESET}  {BOLD}{CYAN}c{RESET}{DIM}onfig{RESET}  {BOLD}{CYAN}?{RESET}{DIM}help{RESET}  {BOLD}{CYAN}q{RESET}{DIM}uit{RESET}")
 
     return lines
+
+
+def render_footer(term_width):
+    """Render the sticky footer hotkey bar."""
+    w = min(term_width, 80)
+    sep = f"  {DIM}{'─' * w}{RESET}"
+    keys = (
+        f"  {BOLD}{CYAN}s{RESET}{DIM}tats{RESET}  "
+        f"{BOLD}{CYAN}d{RESET}{DIM}etails{RESET}  "
+        f"{BOLD}{CYAN}l{RESET}{DIM}og{RESET}  "
+        f"{BOLD}{CYAN}e{RESET}{DIM}xport{RESET}  "
+        f"{DIM}sessi{RESET}{BOLD}{CYAN}o{RESET}{DIM}ns{RESET}  "
+        f"{BOLD}{CYAN}c{RESET}{DIM}onfig{RESET}  "
+        f"{BOLD}{CYAN}?{RESET}{DIM}help{RESET}  "
+        f"{BOLD}{CYAN}q{RESET}{DIM}uit{RESET}"
+    )
+    return f"{sep}\n{keys}"
 
 
 def _read_claude_settings():
@@ -1644,10 +1659,16 @@ def main():
                 # Matrix animates when Claude is working or transcript just changed
                 idle = now - last_data_time
                 is_active = bool(r and r.get("waiting_for_response")) or idle < 5
+                term_h = shutil.get_terminal_size().lines
 
                 if needs_full_redraw:
                     matrix_line = render_matrix_header(frame, min(term_width, 80), active=is_active)
+                    footer = render_footer(term_width)
+                    # Row 1: header, Row 2+: body, last 2 rows: footer
                     out.write(CLEAR + matrix_line + "\n" + cached_body)
+                    # Pin footer to bottom
+                    footer_row = term_h - 1  # separator line
+                    out.write(f"\033[{footer_row};1H{footer}")
                     out.flush()
                     needs_full_redraw = False
                 elif is_active:
