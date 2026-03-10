@@ -779,15 +779,22 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
 
 def _render_log(r, term_width):
     """Render the LOG section (scrollable area)."""
+    max_log = get_setting("monitor", "log_lines", default=8)
+    if max_log is False or max_log == 0:
+        return []
+
     w = min(term_width - 2, 80)
     lines = []
 
     if r["event_log"]:
+        events = r["event_log"]
+        if isinstance(max_log, int) and max_log > 0:
+            events = events[-max_log:]
         lines.append("")
         lines.append(f"  {BOLD}{DIM}LOG{RESET}")
         max_desc = w - 14  # 2 indent + 10 timestamp + 2 gap
         indent = " " * 14  # align continuation with description start
-        for evt_ts, evt_desc in r["event_log"]:
+        for evt_ts, evt_desc in events:
             t = format_event_time(evt_ts) if evt_ts else "??:??:??"
             # Color events by type
             if evt_desc.startswith("error:"):
@@ -887,6 +894,7 @@ def show_settings_panel(term_width):
         compact_pct = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
         sparkline_mode = get_setting("sparkline", "mode", default="tail")
         merge_size = get_setting("sparkline", "merge_size", default=2)
+        log_lines = get_setting("monitor", "log_lines", default=8)
 
         lines = []
         lines.append("")
@@ -922,8 +930,18 @@ def show_settings_panel(term_width):
             lines.append(f"    {BOLD}{CYAN}4{RESET}   Merge size             {CYAN}{merge_size}{RESET}")
             lines.append(f"        {DIM}Turns per bar in merge mode{RESET}")
             lines.append("")
+        lines.append(f"  {BOLD}  Monitor{RESET}")
         lines.append(f"  {'─' * w}")
-        lines.append(f"  {DIM}Press {BOLD}1-4{RESET}{DIM} to change, {BOLD}ESC{RESET}{DIM} or {BOLD}q{RESET}{DIM} to close{RESET}")
+        lines.append("")
+        if log_lines is False or log_lines == 0:
+            log_display = f"{RED}OFF{RESET}"
+        else:
+            log_display = f"{CYAN}{log_lines}{RESET}"
+        lines.append(f"    {BOLD}{CYAN}5{RESET}   Log lines              {log_display}")
+        lines.append(f"        {DIM}Number of log entries on monitor screen (0 = off){RESET}")
+        lines.append("")
+        lines.append(f"  {'─' * w}")
+        lines.append(f"  {DIM}Press {BOLD}1-5{RESET}{DIM} to change, {BOLD}ESC{RESET}{DIM} or {BOLD}q{RESET}{DIM} to close{RESET}")
 
         out.write(CLEAR + "\n".join(lines))
         out.flush()
@@ -971,6 +989,17 @@ def show_settings_panel(term_width):
                     if val is not None:
                         _save_claudeui_setting(
                             "sparkline", "merge_size", val)
+                    break  # re-render
+
+                elif ch == "5":
+                    # Edit log lines (0 = off)
+                    current_display = log_lines if isinstance(log_lines, int) and log_lines > 0 else "0 (off)"
+                    val = _input_number(out, fd, w,
+                                        "Log lines (0 = off, 1-50)",
+                                        current_display, 0, 50)
+                    if val is not None:
+                        _save_claudeui_setting(
+                            "monitor", "log_lines", val)
                     break  # re-render
 
 

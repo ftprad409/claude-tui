@@ -77,7 +77,7 @@ Claude Code hooks for automatic in-session context. Three hook scripts:
 
 - Config file: `~/.claude/claudeui.json` — shared between statusline and monitor
 - Hot-reloads: both tools re-read on file change, no restart needed
-- Settings: `sparkline.mode` (`"tail"` or `"merge"`), `sparkline.merge_size` (turns per bar, default: 2)
+- Settings: `sparkline.mode` (`"tail"` or `"merge"`), `sparkline.merge_size` (turns per bar, default: 2), `monitor.log_lines` (0–50, default: 8, 0 = off)
 - Config loader: `load_settings()` / `get_setting(*keys, default=...)` in each tool (self-contained, no shared imports)
 
 ## Local Development

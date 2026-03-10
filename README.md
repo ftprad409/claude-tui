@@ -103,6 +103,9 @@ Customize behavior via `~/.claude/claudeui.json` (hot-reloads, no restart needed
   "sparkline": {
     "mode": "tail",
     "merge_size": 3
+  },
+  "monitor": {
+    "log_lines": 8
   }
 }
 ```
@@ -111,6 +114,7 @@ Customize behavior via `~/.claude/claudeui.json` (hot-reloads, no restart needed
 |---------|--------|---------|-------------|
 | `sparkline.mode` | `"tail"`, `"merge"` | `"tail"` | `tail` shows last N turns; `merge` combines turns into buckets |
 | `sparkline.merge_size` | number | `2` | Turns per bar in merge mode |
+| `monitor.log_lines` | `0`–`50` | `8` | Number of log entries on monitor main screen (`0` = off) |
 
 ## Tools
 
