@@ -23,7 +23,7 @@ Real-time dashboard, statusline, and analytics for Claude Code sessions.
 
 ## Install
 
-### Homebrew (macOS)
+### macOS (Homebrew)
 
 ```bash
 brew tap slima4/claude-tui
@@ -31,7 +31,7 @@ brew install claude-tui
 claudetui setup       # configure statusline, hooks, and commands
 ```
 
-### Script
+### macOS / Linux (script)
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/slima4/claude-tui/main/install.sh | bash
@@ -41,6 +41,15 @@ Or clone and install locally:
 
 ```bash
 git clone https://github.com/slima4/claude-tui.git && ./claude-tui/install.sh
+```
+
+### Windows (WSL)
+
+ClaudeTUI requires a Unix-like environment. On Windows, use [WSL 2](https://learn.microsoft.com/en-us/windows/wsl/install):
+
+```bash
+# inside WSL terminal
+curl -sSL https://raw.githubusercontent.com/slima4/claude-tui/main/install.sh | bash
 ```
 
 After install:
