@@ -2,20 +2,20 @@
 set -euo pipefail
 
 # ── Claude UI Installer ─────────────────────────────────────────────
-# Installs the full claudeui suite for Claude Code:
+# Installs the full claude-tui suite for Claude Code:
 #   • Statusline — real-time status bar
 #   • Hooks — file hotspots, dependency warnings, churn alerts
-#   • Commands — /ui:session, /ui:cost, /ui:perf, /ui:context
+#   • Commands — /tui:session, /tui:cost, /tui:perf, /tui:context
 #   • Monitor — live dashboard (standalone terminal tool)
 #   • Session Stats — post-session analytics
 #   • Session Manager — browse, compare, export sessions
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/slima4/claudeui/main/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/slima4/claude-tui/main/install.sh | bash
 #   # or
-#   git clone https://github.com/slima4/claudeui.git && ./claudeui/install.sh
+#   git clone https://github.com/slima4/claude-tui.git && ./claude-tui/install.sh
 
-REPO_URL="https://github.com/slima4/claudeui.git"
+REPO_URL="https://github.com/slima4/claude-tui.git"
 INSTALL_DIR="${INSTALL_DIR:-${CLAUDE_UI_HOME:-$HOME/.claude-ui}}"
 CLAUDE_DIR="$HOME/.claude"
 SETTINGS_FILE="$CLAUDE_DIR/settings.json"
@@ -35,12 +35,12 @@ LOGO_GREEN='\033[38;5;46m'
 
 print_header() {
     echo ""
-    echo -e "  ${BOLD} ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗${LOGO_GREEN}██╗   ██╗██╗${RESET}"
-    echo -e "  ${BOLD}██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝${LOGO_GREEN}██║   ██║██║${RESET}"
-    echo -e "  ${BOLD}██║      ██║     ███████║██║   ██║██║  ██║█████╗  ${LOGO_GREEN}██║   ██║██║${RESET}"
-    echo -e "  ${BOLD}██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  ${LOGO_GREEN}██║   ██║██║${RESET}"
-    echo -e "  ${BOLD}╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗${LOGO_GREEN}╚██████╔╝██║${RESET}"
-    echo -e "  ${BOLD} ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝${LOGO_GREEN} ╚═════╝ ╚═╝${RESET}"
+    echo -e "  ${BOLD} ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗${LOGO_GREEN}████████╗██╗   ██╗██╗${RESET}"
+    echo -e "  ${BOLD}██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝${LOGO_GREEN}╚══██╔══╝██║   ██║██║${RESET}"
+    echo -e "  ${BOLD}██║      ██║     ███████║██║   ██║██║  ██║█████╗  ${LOGO_GREEN}   ██║   ██║   ██║██║${RESET}"
+    echo -e "  ${BOLD}██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  ${LOGO_GREEN}   ██║   ██║   ██║██║${RESET}"
+    echo -e "  ${BOLD}╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗${LOGO_GREEN}   ██║   ╚██████╔╝██║${RESET}"
+    echo -e "  ${BOLD} ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝${LOGO_GREEN}   ╚═╝    ╚═════╝ ╚═╝${RESET}"
     echo -e "    ${DIM}Installer${RESET}"
     echo ""
 }
@@ -93,6 +93,31 @@ if [ ! -d "$CLAUDE_DIR" ]; then
 fi
 ok "Claude Code detected"
 
+# ── Migrate from old ClaudeUI name ─────────────────────────────────
+
+# Remove old Homebrew tap if present
+if command -v brew &>/dev/null; then
+    if brew tap 2>/dev/null | grep -q 'slima4/claudeui'; then
+        echo ""
+        step "Migrating from old ClaudeUI install..."
+        brew untap slima4/claudeui 2>/dev/null && ok "Removed old tap slima4/claudeui"
+        if brew list claudeui &>/dev/null; then
+            brew uninstall claudeui 2>/dev/null && ok "Uninstalled old brew formula"
+        fi
+    fi
+fi
+
+# Update git remote if pointing to old repo name
+if [ -d "$INSTALL_DIR/.git" ]; then
+    OLD_REMOTE=$(cd "$INSTALL_DIR" && git remote get-url origin 2>/dev/null || echo "")
+    if echo "$OLD_REMOTE" | grep -q 'claudeui'; then
+        echo ""
+        step "Updating repository URL..."
+        (cd "$INSTALL_DIR" && git remote set-url origin "$REPO_URL")
+        ok "Remote updated to $REPO_URL"
+    fi
+fi
+
 # ── Download / Update ────────────────────────────────────────────────
 
 echo ""
@@ -127,16 +152,21 @@ step "Installing slash commands..."
 
 mkdir -p "$COMMANDS_DIR"
 
-# Symlink the ui commands directory
+# Remove old /ui: symlink if present (renamed to /tui:)
 if [ -L "$COMMANDS_DIR/ui" ]; then
     rm "$COMMANDS_DIR/ui"
 fi
-if [ -d "$COMMANDS_DIR/ui" ]; then
-    warn "Existing $COMMANDS_DIR/ui/ directory found — backing up"
-    mv "$COMMANDS_DIR/ui" "$COMMANDS_DIR/ui.backup.$(date +%s)"
+
+# Symlink the tui commands directory
+if [ -L "$COMMANDS_DIR/tui" ]; then
+    rm "$COMMANDS_DIR/tui"
 fi
-ln -sfn "$INSTALL_DIR/claude-code-commands/ui" "$COMMANDS_DIR/ui"
-ok "/ui:session, /ui:cost, /ui:perf, /ui:context"
+if [ -d "$COMMANDS_DIR/tui" ]; then
+    warn "Existing $COMMANDS_DIR/tui/ directory found — backing up"
+    mv "$COMMANDS_DIR/tui" "$COMMANDS_DIR/tui.backup.$(date +%s)"
+fi
+ln -sfn "$INSTALL_DIR/claude-code-commands/tui" "$COMMANDS_DIR/tui"
+ok "/tui:session, /tui:cost, /tui:perf, /tui:context"
 
 # ── Choose statusline mode ──────────────────────────────────────────
 
@@ -324,7 +354,7 @@ echo -e "  ${BOLD}What's installed:${RESET}"
 echo ""
 echo -e "  ${CYAN}Statusline${RESET}      Real-time status bar in Claude Code (${DISPLAY_MODE} mode)"
 echo -e "  ${CYAN}Hooks${RESET}           File hotspots, dependency warnings, churn alerts"
-echo -e "  ${CYAN}Commands${RESET}        /ui:session  /ui:cost  /ui:perf  /ui:context"
+echo -e "  ${CYAN}Commands${RESET}        /tui:session  /tui:cost  /tui:perf  /tui:context"
 echo -e "  ${CYAN}Monitor${RESET}         claude-ui-monitor (live dashboard in separate terminal)"
 echo -e "  ${CYAN}Stats${RESET}           claude-stats (post-session analytics)"
 echo -e "  ${CYAN}Sessions${RESET}        claude-sessions (browse, compare, export)"
@@ -338,8 +368,8 @@ echo -e "  ${DIM}# Open a second terminal for the live monitor${RESET}"
 echo -e "  claude-ui-monitor"
 echo ""
 echo -e "  ${DIM}# Inside Claude Code, use slash commands${RESET}"
-echo -e "  /ui:session    ${DIM}# full session report${RESET}"
-echo -e "  /ui:cost       ${DIM}# cost deep dive${RESET}"
+echo -e "  /tui:session    ${DIM}# full session report${RESET}"
+echo -e "  /tui:cost       ${DIM}# cost deep dive${RESET}"
 echo ""
 echo -e "  ${DIM}# Post-session analytics${RESET}"
 echo -e "  claude-stats"
@@ -347,9 +377,9 @@ echo -e "  claude-sessions list"
 echo -e "  claude-ui-mode compact  ${DIM}# switch to 1-line statusline${RESET}"
 echo ""
 echo -e "  ${DIM}Installed to: $INSTALL_DIR${RESET}"
-if [[ "$INSTALL_DIR" == */opt/claudeui/* || "$INSTALL_DIR" == */Cellar/claudeui/* ]]; then
-    echo -e "  ${DIM}To update:    brew upgrade claudeui${RESET}"
-    echo -e "  ${DIM}To uninstall: claude-ui-uninstall && brew uninstall claudeui${RESET}"
+if [[ "$INSTALL_DIR" == */opt/claude-tui/* || "$INSTALL_DIR" == */Cellar/claude-tui/* ]]; then
+    echo -e "  ${DIM}To update:    brew upgrade claude-tui${RESET}"
+    echo -e "  ${DIM}To uninstall: claude-ui-uninstall && brew uninstall claude-tui${RESET}"
 else
     echo -e "  ${DIM}To update:    cd $INSTALL_DIR && git pull${RESET}"
     echo -e "  ${DIM}To uninstall: claude-ui-uninstall${RESET}"

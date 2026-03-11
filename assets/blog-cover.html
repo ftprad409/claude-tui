@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1000px;
+    height: 420px;
+    overflow: hidden;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    background: #0a0e14;
+    display: flex;
+    position: relative;
+  }
+
+  body::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0, 255, 65, 0.015) 2px, rgba(0, 255, 65, 0.015) 4px
+    );
+  }
+
+  .left {
+    width: 360px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 40px 20px 40px 48px;
+  }
+
+  .badge {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #00ff41;
+    border: 1px solid #03a062;
+    padding: 2px 10px;
+    border-radius: 3px;
+    margin-bottom: 14px;
+    display: inline-block;
+    align-self: flex-start;
+  }
+
+  .title {
+    font-size: 52px;
+    font-weight: 700;
+    color: #e8edf3;
+    letter-spacing: -2px;
+    margin-bottom: 10px;
+  }
+  .title span { color: #00ff41; }
+
+  .tagline {
+    font-size: 14px;
+    color: #6b7a8d;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+
+  .features {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .feat {
+    font-size: 10px;
+    color: #03a062;
+    border: 1px solid #1e2a3a;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(0, 255, 65, 0.03);
+  }
+
+  /* ── Claude Code simulation ── */
+  .right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .cc-window {
+    flex: 1;
+    background: #1a1b26;
+    border-left: 1px solid #1e2a3a;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cc-header {
+    background: #16171f;
+    padding: 8px 16px;
+    border-bottom: 1px solid #1e2a3a;
+    font-size: 11px;
+    color: #6b7a8d;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .cc-header .dots {
+    display: flex;
+    gap: 5px;
+  }
+  .cc-header .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .dot-r { background: #f04040; }
+  .dot-y { background: #f0c040; }
+  .dot-g { background: #00c040; }
+
+  .cc-body {
+    flex: 1;
+    padding: 16px 20px;
+    font-size: 12px;
+    line-height: 1.7;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+
+  .cc-msg {
+    margin-bottom: 12px;
+  }
+
+  .cc-role {
+    font-size: 10px;
+    margin-bottom: 3px;
+  }
+
+  .cc-user .cc-role { color: #56d4dd; }
+  .cc-assistant .cc-role { color: #c678dd; }
+
+  .cc-text {
+    color: #c5cdd8;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .cc-tool {
+    background: rgba(0, 255, 65, 0.04);
+    border-left: 2px solid #03a062;
+    padding: 4px 10px;
+    margin: 4px 0;
+    font-size: 11px;
+    color: #6b7a8d;
+  }
+
+  .cc-tool .t-name { color: #03a062; }
+  .cc-tool .t-file { color: #00ff41; }
+
+  .cc-prompt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .cc-prompt .chevron {
+    color: #56d4dd;
+    font-size: 14px;
+  }
+
+  .cc-prompt .cursor {
+    width: 8px;
+    height: 16px;
+    background: #c5cdd8;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  /* ── Statusline at bottom ── */
+  .statusline {
+    background: #0d1117;
+    border-top: 1px solid #1e2a3a;
+    padding: 6px 14px;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  .sl-line { white-space: pre; }
+
+  .green { color: #00ff41; }
+  .green-dim { color: #03a062; }
+  .green-dark { color: #003b00; }
+  .cyan { color: #56d4dd; }
+  .yellow { color: #f0c040; }
+  .orange { color: #e89040; }
+  .red { color: #f04040; }
+  .magenta { color: #c678dd; }
+  .dim { color: #6b7a8d; }
+  .bright { color: #e8edf3; }
+  .bold { font-weight: 700; }
+</style>
+</head>
+<body>
+
+  <div class="left">
+    <div class="badge">open source</div>
+    <div class="title">Claude<span>TUI</span></div>
+    <div class="tagline">See inside your Claude Code sessions.<br>Context, cost, tools, files — all live.</div>
+    <div class="features">
+      <div class="feat">statusline</div>
+      <div class="feat">monitor</div>
+      <div class="feat">stats</div>
+      <div class="feat">hooks</div>
+      <div class="feat">/tui:commands</div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="cc-window">
+      <div class="cc-header">
+        <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+        <span>claude — my-project</span>
+      </div>
+      <div class="cc-body">
+        <div class="cc-msg cc-assistant">
+          <div class="cc-text">I'll refactor the auth module and add tests.</div>
+        </div>
+        <div class="cc-tool"><span class="t-name">Read</span> <span class="t-file">src/auth.ts</span></div>
+        <div class="cc-tool"><span class="t-name">Edit</span> <span class="t-file">src/auth.ts</span> <span class="dim">— extract validateToken()</span></div>
+        <div class="cc-tool"><span class="t-name">Write</span> <span class="t-file">tests/auth.test.ts</span> <span class="dim">— 12 test cases</span></div>
+        <div class="cc-tool"><span class="t-name">Bash</span> <span class="dim">npm test</span> <span class="green">✓ 12 passed</span></div>
+        <div class="cc-msg cc-assistant">
+          <div class="cc-text">Done. Extracted <span class="cyan">validateToken()</span>, added 12 tests, all passing.</div>
+        </div>
+        <div class="cc-prompt">
+          <span class="chevron">›</span>
+          <div class="cursor"></div>
+        </div>
+      </div>
+      <div class="statusline">
+        <div class="sl-line"><span class="green-dark">0</span><span class="green-dim">1</span><span class="green">1</span><span class="green-dark">0</span><span class="green-dim">1</span><span class="green-dark">0</span><span class="green">0</span> <span class="bold magenta">Opus 4.6</span> <span class="dim">│</span> <span class="green">████████</span><span class="dim">░░░░░░░░░░░░</span> <span class="cyan">42%</span> <span class="cyan">65.5k</span><span class="dim">/200.0k</span> <span class="dim">│</span> <span class="green">~24 turns left</span> <span class="dim">│</span> <span class="green">▁▂</span><span class="yellow">▃▅</span><span class="orange">▆▇</span><span class="dim">↓</span><span class="green">▁▃</span><span class="yellow">▅</span> <span class="dim">│</span> <span class="yellow">$2.34</span> <span class="dim">│</span> <span class="bright">12m</span></div>
+        <div class="sl-line"><span class="green-dark">1</span><span class="green-dim">0</span><span class="green-dark">0</span><span class="green">1</span><span class="green-dark">0</span><span class="green-dim">1</span><span class="green">1</span> <span class="green">my-project</span> <span class="dim">│</span> <span class="magenta">main</span> <span class="green">+42</span> <span class="red">-17</span> <span class="dim">│</span> <span class="cyan">18</span> <span class="dim">turns</span> <span class="dim">│</span> <span class="cyan">3</span> <span class="dim">files</span> <span class="dim">│</span> <span class="cyan">0</span> <span class="dim">err</span> <span class="dim">│</span> <span class="green">82%</span> <span class="dim">cache</span> <span class="dim">│</span> <span class="cyan">2</span><span class="dim">x think</span> <span class="dim">│</span> <span class="dim">~</span><span class="yellow">$0.13</span><span class="dim">/turn</span></div>
+        <div class="sl-line"><span class="green-dim">0</span><span class="green">1</span><span class="green-dark">1</span><span class="green-dim">0</span><span class="green-dark">0</span><span class="green">1</span><span class="green-dark">0</span> <span class="dim">read</span> <span class="green">auth.ts</span> <span class="dim">→</span> <span class="dim">edit</span> <span class="green">auth.ts</span> <span class="dim">→</span> <span class="dim">write</span> <span class="green">auth.test.ts</span> <span class="dim">→</span> <span class="dim">bash</span> <span class="green">npm</span> <span class="dim">│</span> <span class="yellow">auth.ts</span><span class="dim">×1</span> <span class="yellow">auth.test.ts</span><span class="dim">×1</span></div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

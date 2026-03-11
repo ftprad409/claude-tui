@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="ClaudeUI" width="620">
+  <img src="assets/logo.svg" alt="ClaudeTUI" width="720">
 </p>
 
-[![Release](https://img.shields.io/github/v/release/slima4/claudeui)](https://github.com/slima4/claudeui/releases)
-[![Stars](https://img.shields.io/github/stars/slima4/claudeui)](https://github.com/slima4/claudeui/stargazers)
-[![Last Commit](https://img.shields.io/github/last-commit/slima4/claudeui)](https://github.com/slima4/claudeui/commits/main)
-[![License](https://img.shields.io/github/license/slima4/claudeui)](https://github.com/slima4/claudeui/blob/main/LICENSE)
+[![Release](https://img.shields.io/github/v/release/slima4/claude-tui)](https://github.com/slima4/claude-tui/releases)
+[![Stars](https://img.shields.io/github/stars/slima4/claude-tui)](https://github.com/slima4/claude-tui/stargazers)
+[![Last Commit](https://img.shields.io/github/last-commit/slima4/claude-tui)](https://github.com/slima4/claude-tui/commits/main)
+[![License](https://img.shields.io/github/license/slima4/claude-tui)](https://github.com/slima4/claude-tui/blob/main/LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue?logo=python&logoColor=white)]()
 [![Shell](https://img.shields.io/badge/shell-bash%20%7C%20zsh-black?logo=gnubash&logoColor=white)]()
 
 Real-time dashboard, statusline, and analytics for Claude Code sessions.
 
-**Website:** [slima4.github.io/claudeui](https://slima4.github.io/claudeui/)
+**Website:** [slima4.github.io/claude-tui](https://slima4.github.io/claude-tui/)
 
 **Statusline** — context, cost, sparkline, and live tool trace right inside Claude Code:
 
@@ -26,21 +26,21 @@ Real-time dashboard, statusline, and analytics for Claude Code sessions.
 ### Homebrew (macOS)
 
 ```bash
-brew tap slima4/claudeui
-brew install claudeui
+brew tap slima4/claude-tui
+brew install claude-tui
 claude-ui-setup       # configure statusline, hooks, and commands
 ```
 
 ### Script
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/slima4/claudeui/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/slima4/claude-tui/main/install.sh | bash
 ```
 
 Or clone and install locally:
 
 ```bash
-git clone https://github.com/slima4/claudeui.git && ./claudeui/install.sh
+git clone https://github.com/slima4/claude-tui.git && ./claude-tui/install.sh
 ```
 
 After install:
@@ -54,21 +54,21 @@ claude-ui-mode compact # switch to 1-line statusline
 claude-ui-mode full    # switch to 3-line statusline
 claude-ui-mode custom  # interactive configurator
 # inside Claude Code:
-/ui:session           # deep session report
-/ui:cost              # cost breakdown
+/tui:session           # deep session report
+/tui:cost              # cost breakdown
 ```
 
 ### Uninstall
 
 ```bash
 claude-ui-uninstall       # clean settings, then uninstall
-brew uninstall claudeui
+brew uninstall claude-tui
 ```
 
 If you already ran `brew uninstall` first:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/slima4/claudeui/main/uninstall.sh | bash
+curl -sSL https://raw.githubusercontent.com/slima4/claude-tui/main/uninstall.sh | bash
 ```
 
 ### Customize Statusline
@@ -202,13 +202,13 @@ python3 session-manager.py diff a1b2c3d4 13a4b5c6
 
 ### [claude-code-commands](./claude-code-commands/)
 
-Custom slash commands for deep session analytics on demand. Install to `~/.claude/commands/ui/` and use:
+Custom slash commands for deep session analytics on demand. Install to `~/.claude/commands/tui/` and use:
 
 ```
-/ui:session    Full session report — context, cost, tools, thinking
-/ui:cost       Cost deep dive — spending breakdown, cache savings, projections
-/ui:perf       Performance analysis — tool efficiency, errors, file heatmap
-/ui:context    Context window analysis — growth curve, compaction timeline, predictions
+/tui:session    Full session report — context, cost, tools, thinking
+/tui:cost       Cost deep dive — spending breakdown, cache savings, projections
+/tui:perf       Performance analysis — tool efficiency, errors, file heatmap
+/tui:context    Context window analysis — growth curve, compaction timeline, predictions
 ```
 
 ### [claude-code-monitor](./claude-code-monitor/)

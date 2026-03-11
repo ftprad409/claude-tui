@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ClaudeUI — statusline mode switcher and component configurator."""
+"""ClaudeTUI — statusline mode switcher and component configurator."""
 import curses
 import json
 import os
@@ -24,7 +24,7 @@ RESET = "\033[0m"
 
 
 MAIN_HELP = f"""\
-{BOLD}claude-ui-mode{RESET} — statusline mode switcher for ClaudeUI
+{BOLD}claude-ui-mode{RESET} — statusline mode switcher for ClaudeTUI
 
 {BOLD}Usage:{RESET}
   claude-ui-mode {CYAN}<command>{RESET} [options]
@@ -46,7 +46,7 @@ MAIN_HELP = f"""\
   claude-ui-mode custom -l        {DIM}# show what's hidden{RESET}
 
 {DIM}Config: ~/.claude/claudeui.json{RESET}
-{DIM}Docs:   https://github.com/slima4/claudeui{RESET}
+{DIM}Docs:   https://github.com/slima4/claude-tui{RESET}
 """
 
 CUSTOM_HELP = f"""\
@@ -308,12 +308,12 @@ def interactive_curses(custom):
                 " ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝",
             ]
             logo_ui = [
-                "██╗   ██╗██╗",
-                "██║   ██║██║",
-                "██║   ██║██║",
-                "██║   ██║██║",
-                "╚██████╔╝██║",
-                " ╚═════╝ ╚═╝",
+                "████████╗██╗   ██╗██╗",
+                "╚══██╔══╝██║   ██║██║",
+                "   ██║   ██║   ██║██║",
+                "   ██║   ██║   ██║██║",
+                "   ██║   ╚██████╔╝██║",
+                "   ╚═╝    ╚═════╝ ╚═╝",
             ]
             x = 2
             try:
@@ -687,7 +687,7 @@ def main():
     if cmd in ("-h", "--help"):
         print(MAIN_HELP)
     elif cmd in ("-v", "--version"):
-        print(f"  claudeui {BOLD}{VERSION}{RESET}")
+        print(f"  claude-tui {BOLD}{VERSION}{RESET}")
     elif cmd == "full":
         set_mode("full")
     elif cmd == "compact":

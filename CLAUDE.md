@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ClaudeUI is a collection of standalone utilities for Claude Code. Each tool lives in its own subdirectory with its own README.
+ClaudeTUI is a collection of standalone utilities for Claude Code. Each tool lives in its own subdirectory with its own README.
 
 ## Tools
 
@@ -45,7 +45,7 @@ Session browser and manager. Single-file script.
 
 ### claude-code-commands
 
-Custom slash commands for in-session analytics. Markdown files installed to `~/.claude/commands/ui/`.
+Custom slash commands for in-session analytics. Markdown files installed to `~/.claude/commands/tui/`.
 
 - Commands: `session` (full report), `cost` (spending breakdown), `perf` (tool efficiency), `context` (growth curve)
 - Each command instructs Claude to read the current transcript JSONL and present formatted analysis

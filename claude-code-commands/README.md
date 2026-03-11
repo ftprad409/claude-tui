@@ -3,37 +3,37 @@
 Custom slash commands for Claude Code that provide deep session analytics on demand.
 
 ```
-/ui:session    Full session report — context, cost, tools, thinking
-/ui:cost       Cost deep dive — spending breakdown, cache savings, projections
-/ui:perf       Performance analysis — tool efficiency, errors, file heatmap
-/ui:context    Context window analysis — growth curve, compaction timeline, predictions
+/tui:session    Full session report — context, cost, tools, thinking
+/tui:cost       Cost deep dive — spending breakdown, cache savings, projections
+/tui:perf       Performance analysis — tool efficiency, errors, file heatmap
+/tui:context    Context window analysis — growth curve, compaction timeline, predictions
 ```
 
 ## Installation
 
-Copy the `ui` folder to your Claude Code commands directory:
+Copy the `tui` folder to your Claude Code commands directory:
 
 ```bash
-cp -r claude-code-commands/ui ~/.claude/commands/
+cp -r claude-code-commands/tui ~/.claude/commands/
 ```
 
-The commands become available immediately as `/ui:session`, `/ui:cost`, etc.
+The commands become available immediately as `/tui:session`, `/tui:cost`, etc.
 
 ## Commands
 
-### `/ui:session` — Full Session Report
+### `/tui:session` — Full Session Report
 
 Complete session overview with context usage, cost breakdown, tool activity, and thinking analysis. Start here for a quick health check.
 
-### `/ui:cost` — Cost Analysis
+### `/tui:cost` — Cost Analysis
 
 Detailed spending breakdown by token category, cache savings calculation, per-turn cost trend, and budget projection based on current burn rate.
 
-### `/ui:context` — Context Deep Dive
+### `/tui:context` — Context Deep Dive
 
 ASCII growth curve, compaction timeline, per-turn breakdown, growth rate analysis with multiple prediction windows (last 5/10/all turns), and actionable recommendations.
 
-### `/ui:perf` — Performance Analysis
+### `/tui:perf` — Performance Analysis
 
 Tool usage with success rates, error patterns, file activity heatmap, session phase detection, and efficiency metrics.
 
@@ -42,14 +42,14 @@ Tool usage with success rates, error patterns, file activity heatmap, session ph
 Each command has a companion Python script that parses the transcript JSONL file and outputs a formatted report. The markdown command tells Claude to run the script and show the output — one Bash call, minimal token cost, consistent results.
 
 ```
-ui/
-├── session.md           # Command: /ui:session
+tui/
+├── session.md           # Command: /tui:session
 ├── session_report.py    # Parser + formatter
-├── cost.md              # Command: /ui:cost
+├── cost.md              # Command: /tui:cost
 ├── cost_report.py
-├── perf.md              # Command: /ui:perf
+├── perf.md              # Command: /tui:perf
 ├── perf_report.py
-├── context.md           # Command: /ui:context
+├── context.md           # Command: /tui:context
 ├── context_report.py
 └── lib.py               # Shared transcript parsing library
 ```

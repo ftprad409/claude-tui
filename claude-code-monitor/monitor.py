@@ -1456,12 +1456,12 @@ def export_session(path, session_id):
 # ── Splash screen ────────────────────────────────────────────────────
 
 LOGO_LINES = [
-    (f" {BOLD} ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗", f"{LOGO_GREEN}██╗   ██╗██╗{RESET}"),
-    (f" {BOLD}██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝", f"{LOGO_GREEN}██║   ██║██║{RESET}"),
-    (f" {BOLD}██║      ██║     ███████║██║   ██║██║  ██║█████╗  ", f"{LOGO_GREEN}██║   ██║██║{RESET}"),
-    (f" {BOLD}██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  ", f"{LOGO_GREEN}██║   ██║██║{RESET}"),
-    (f" {BOLD}╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗", f"{LOGO_GREEN}╚██████╔╝██║{RESET}"),
-    (f" {BOLD} ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝", f"{LOGO_GREEN} ╚═════╝ ╚═╝{RESET}"),
+    (f" {BOLD} ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗", f"{LOGO_GREEN}████████╗██╗   ██╗██╗{RESET}"),
+    (f" {BOLD}██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝", f"{LOGO_GREEN}╚══██╔══╝██║   ██║██║{RESET}"),
+    (f" {BOLD}██║      ██║     ███████║██║   ██║██║  ██║█████╗  ", f"{LOGO_GREEN}   ██║   ██║   ██║██║{RESET}"),
+    (f" {BOLD}██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  ", f"{LOGO_GREEN}   ██║   ██║   ██║██║{RESET}"),
+    (f" {BOLD}╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗", f"{LOGO_GREEN}   ██║   ╚██████╔╝██║{RESET}"),
+    (f" {BOLD} ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝", f"{LOGO_GREEN}   ╚═╝    ╚═════╝ ╚═╝{RESET}"),
 ]
 
 
@@ -1478,13 +1478,12 @@ def show_splash(out, status_text="Searching for session..."):
 
     for claude_part, ui_part in LOGO_LINES:
         line = claude_part + ui_part
-        # Rough center: logo is ~62 chars wide
-        pad = max(0, (term_w - 62) // 2)
+        # Rough center: logo is ~71 chars wide
+        pad = max(0, (term_w - 71) // 2)
         out.write(" " * pad + line + "\n")
 
     out.write("\n")
     subtitle = f"{DIM}Live Session Monitor{RESET}"
-    # "Live Session Monitor" is 20 chars
     pad = max(0, (term_w - 20) // 2)
     out.write(" " * pad + subtitle + "\n\n")
 

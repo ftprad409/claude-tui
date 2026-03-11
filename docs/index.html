@@ -3,24 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ClaudeUI — Real-time dashboard for Claude Code</title>
+  <title>ClaudeTUI — Real-time dashboard for Claude Code</title>
   <meta name="description" content="Statusline, live monitor, session analytics, hooks, and slash commands for Claude Code.">
 
   <!-- Favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%230a0e14'/><text x='16' y='22' font-family='monospace' font-size='16' font-weight='700' fill='%2300ff41' text-anchor='middle'>UI</text></svg>">
 
   <!-- Open Graph -->
-  <meta property="og:title" content="ClaudeUI — Real-time dashboard for Claude Code">
+  <meta property="og:title" content="ClaudeTUI — Real-time dashboard for Claude Code">
   <meta property="og:description" content="Statusline, live monitor, session analytics, hooks, and slash commands for Claude Code.">
-  <meta property="og:image" content="https://raw.githubusercontent.com/slima4/claudeui/main/assets/social-card.png">
-  <meta property="og:url" content="https://slima4.github.io/claudeui/">
+  <meta property="og:image" content="https://raw.githubusercontent.com/slima4/claude-tui/main/assets/social-card.png">
+  <meta property="og:url" content="https://slima4.github.io/claude-tui/">
   <meta property="og:type" content="website">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ClaudeUI — Real-time dashboard for Claude Code">
+  <meta name="twitter:title" content="ClaudeTUI — Real-time dashboard for Claude Code">
   <meta name="twitter:description" content="Statusline, live monitor, session analytics, hooks, and slash commands for Claude Code.">
-  <meta name="twitter:image" content="https://raw.githubusercontent.com/slima4/claudeui/main/assets/social-card.png">
+  <meta name="twitter:image" content="https://raw.githubusercontent.com/slima4/claude-tui/main/assets/social-card.png">
 
   <style>
     :root {
@@ -467,16 +467,16 @@
   <section class="hero">
     <div class="container">
       <div class="hero-badge">Open Source</div>
-      <h1><div class="hero-logo"> ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗<span class="ui">██╗   ██╗██╗</span>
-██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝<span class="ui">██║   ██║██║</span>
-██║      ██║     ███████║██║   ██║██║  ██║█████╗  <span class="ui">██║   ██║██║</span>
-██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  <span class="ui">██║   ██║██║</span>
-╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗<span class="ui">╚██████╔╝██║</span>
- ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝<span class="ui"> ╚═════╝ ╚═╝</span></div></h1>
+      <h1><div class="hero-logo"> ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗<span class="ui">████████╗██╗   ██╗██╗</span>
+██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝<span class="ui">╚══██╔══╝██║   ██║██║</span>
+██║      ██║     ███████║██║   ██║██║  ██║█████╗  <span class="ui">   ██║   ██║   ██║██║</span>
+██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  <span class="ui">   ██║   ██║   ██║██║</span>
+╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗<span class="ui">   ██║   ╚██████╔╝██║</span>
+ ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝<span class="ui">   ╚═╝    ╚═════╝ ╚═╝</span></div></h1>
       <p>Real-time statusline, live monitor, session analytics, hooks, and slash commands for Claude Code.</p>
       <div class="install-box">
         <span class="prompt">$</span>
-        <code>brew tap slima4/claudeui &amp;&amp; brew install claudeui</code>
+        <code>brew tap slima4/claude-tui &amp;&amp; brew install claude-tui</code>
         <button class="copy-btn" onclick="copyInstall(this)">copy</button>
       </div>
     </div>
@@ -532,9 +532,9 @@
           <p>Automatic context injected into sessions — file activity heatmap on start, reverse dependency warnings after edits, high churn alerts before edits.</p>
         </div>
         <div class="feature-card">
-          <span class="feature-icon">/ui:*</span>
+          <span class="feature-icon">/tui:*</span>
           <h3>Slash Commands</h3>
-          <p>In-session analytics on demand: <code>/ui:session</code> <code>/ui:cost</code> <code>/ui:perf</code> <code>/ui:context</code> for deep reports without leaving Claude Code.</p>
+          <p>In-session analytics on demand: <code>/tui:session</code> <code>/tui:cost</code> <code>/tui:perf</code> <code>/tui:context</code> for deep reports without leaving Claude Code.</p>
         </div>
       </div>
     </div>
@@ -698,11 +698,11 @@
           <div class="step">Step 1</div>
           <h3>Install</h3>
           <pre><span class="comment"># Homebrew (macOS)</span>
-brew tap slima4/claudeui &amp;&amp; brew install claudeui
+brew tap slima4/claude-tui &amp;&amp; brew install claude-tui
 claude-ui-setup
 
 <span class="comment"># Or install script</span>
-curl -sSL https://raw.githubusercontent.com/slima4/claudeui/main/install.sh | bash</pre>
+curl -sSL https://raw.githubusercontent.com/slima4/claude-tui/main/install.sh | bash</pre>
         </div>
         <div class="quickstart-card">
           <div class="step">Step 2</div>
@@ -717,8 +717,8 @@ claude-ui-monitor</pre>
           <div class="step">Step 3</div>
           <h3>Explore</h3>
           <pre><span class="comment"># Inside Claude Code</span>
-/ui:session
-/ui:cost
+/tui:session
+/tui:cost
 
 <span class="comment"># After a session</span>
 claude-stats
@@ -736,10 +736,10 @@ claude-sessions list</pre>
       <div class="tool-terminal">
 <div class="line"><span class="t-dim"># Homebrew</span></div>
 <div class="line"><span class="t-bright">claude-ui-uninstall</span></div>
-<div class="line"><span class="t-bright">brew uninstall claudeui</span></div>
+<div class="line"><span class="t-bright">brew uninstall claude-tui</span></div>
 <div class="line"></div>
 <div class="line"><span class="t-dim"># Already ran brew uninstall first?</span></div>
-<div class="line"><span class="t-bright">curl -sSL https://raw.githubusercontent.com/slima4/claudeui/main/uninstall.sh | bash</span></div>
+<div class="line"><span class="t-bright">curl -sSL https://raw.githubusercontent.com/slima4/claude-tui/main/uninstall.sh | bash</span></div>
       </div>
     </div>
   </section>
@@ -748,9 +748,9 @@ claude-sessions list</pre>
   <footer>
     <div class="container">
       <div class="footer-links">
-        <a href="https://github.com/slima4/claudeui">GitHub</a>
-        <a href="https://github.com/slima4/claudeui/issues">Issues</a>
-        <a href="https://github.com/slima4/claudeui/blob/main/LICENSE">MIT License</a>
+        <a href="https://github.com/slima4/claude-tui">GitHub</a>
+        <a href="https://github.com/slima4/claude-tui/issues">Issues</a>
+        <a href="https://github.com/slima4/claude-tui/blob/main/LICENSE">MIT License</a>
       </div>
       <p>Python 3.8+ &middot; stdlib only &middot; no dependencies</p>
     </div>
@@ -758,7 +758,7 @@ claude-sessions list</pre>
 
   <script>
     function copyInstall(btn) {
-      const cmd = 'brew tap slima4/claudeui && brew install claudeui';
+      const cmd = 'brew tap slima4/claude-tui && brew install claude-tui';
       navigator.clipboard.writeText(cmd).then(() => {
         btn.textContent = 'copied!';
         setTimeout(() => btn.textContent = 'copy', 2000);

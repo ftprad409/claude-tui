@@ -39,16 +39,16 @@ jobs:
           SHA256="${{ steps.sha.outputs.sha256 }}"
 
           # Clone the tap repo
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/slima4/homebrew-claudeui.git" tap
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/slima4/homebrew-claude-tui.git" tap
           cd tap
 
           # Update URL and SHA256
-          sed -i "s|/tags/v[0-9.]*\.tar\.gz|/tags/${TAG}.tar.gz|" Formula/claudeui.rb
-          sed -i "s|sha256 \"[a-f0-9]*\"|sha256 \"${SHA256}\"|" Formula/claudeui.rb
+          sed -i "s|/tags/v[0-9.]*\.tar\.gz|/tags/${TAG}.tar.gz|" Formula/claude-tui.rb
+          sed -i "s|sha256 \"[a-f0-9]*\"|sha256 \"${SHA256}\"|" Formula/claude-tui.rb
 
           # Commit and push
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/claudeui.rb
-          git commit -m "Update claudeui to ${TAG}"
+          git add Formula/claude-tui.rb
+          git commit -m "Update claude-tui to ${TAG}"
           git push

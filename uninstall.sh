@@ -19,12 +19,12 @@ RESET='\033[0m'
 LOGO_GREEN='\033[38;5;46m'
 
 echo ""
-echo -e "  ${BOLD} ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗${LOGO_GREEN}██╗   ██╗██╗${RESET}"
-echo -e "  ${BOLD}██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝${LOGO_GREEN}██║   ██║██║${RESET}"
-echo -e "  ${BOLD}██║      ██║     ███████║██║   ██║██║  ██║█████╗  ${LOGO_GREEN}██║   ██║██║${RESET}"
-echo -e "  ${BOLD}██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  ${LOGO_GREEN}██║   ██║██║${RESET}"
-echo -e "  ${BOLD}╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗${LOGO_GREEN}╚██████╔╝██║${RESET}"
-echo -e "  ${BOLD} ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝${LOGO_GREEN} ╚═════╝ ╚═╝${RESET}"
+echo -e "  ${BOLD} ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗${LOGO_GREEN}████████╗██╗   ██╗██╗${RESET}"
+echo -e "  ${BOLD}██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝${LOGO_GREEN}╚══██╔══╝██║   ██║██║${RESET}"
+echo -e "  ${BOLD}██║      ██║     ███████║██║   ██║██║  ██║█████╗  ${LOGO_GREEN}   ██║   ██║   ██║██║${RESET}"
+echo -e "  ${BOLD}██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  ${LOGO_GREEN}   ██║   ██║   ██║██║${RESET}"
+echo -e "  ${BOLD}╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗${LOGO_GREEN}   ██║   ╚██████╔╝██║${RESET}"
+echo -e "  ${BOLD} ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝${LOGO_GREEN}   ╚═╝    ╚═════╝ ╚═╝${RESET}"
 echo -e "    ${DIM}Uninstaller${RESET}"
 echo ""
 
@@ -36,11 +36,13 @@ for cmd in claude-ui-monitor claude-stats claude-sessions claude-ui-mode claude-
     fi
 done
 
-# Remove commands symlink
-if [ -L "$COMMANDS_DIR/ui" ]; then
-    rm "$COMMANDS_DIR/ui"
-    echo -e "  ${GREEN}✓${RESET} Removed slash commands"
-fi
+# Remove commands symlink (check both old and new names)
+for cmd_dir in tui ui; do
+    if [ -L "$COMMANDS_DIR/$cmd_dir" ]; then
+        rm "$COMMANDS_DIR/$cmd_dir"
+        echo -e "  ${GREEN}✓${RESET} Removed slash commands ($cmd_dir)"
+    fi
+done
 
 # Clean settings.json
 if [ -f "$SETTINGS_FILE" ]; then
@@ -54,7 +56,9 @@ install_dir = os.environ.get("INSTALL_DIR", os.path.expanduser("~/.claude-ui"))
 # Match against all known install locations
 match_paths = {install_dir, os.path.realpath(install_dir)}
 # Also match brew paths and common install locations
-for p in ["/opt/homebrew/opt/claudeui", "/opt/homebrew/Cellar/claudeui",
+for p in ["/opt/homebrew/opt/claude-tui", "/opt/homebrew/Cellar/claude-tui",
+          "/usr/local/opt/claude-tui", "/usr/local/Cellar/claude-tui",
+          "/opt/homebrew/opt/claudeui", "/opt/homebrew/Cellar/claudeui",
           "/usr/local/opt/claudeui", "/usr/local/Cellar/claudeui",
           os.path.expanduser("~/.claude-ui")]:
     match_paths.add(p)
