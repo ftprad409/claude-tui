@@ -561,12 +561,17 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     spark_width = max(20, min(w - 10, 60))
     sparkline = build_sparkline(r["context_history"], spark_width)
 
-    # Compaction prediction
+    # Compaction prediction (turns until auto-compaction, not full limit)
+    compact_pct = 83
+    env_pct = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
+    if env_pct.isdigit() and 1 <= int(env_pct) <= 100:
+        compact_pct = int(env_pct)
+    compact_ceiling = CONTEXT_LIMIT * compact_pct / 100
     turns_left = "—"
     if r["turns_since_compact"] >= 2 and ratio > 0 and ratio < 1.0:
         growth = ctx_used / max(r["turns_since_compact"], 1)
-        remaining = CONTEXT_LIMIT - ctx_used
-        if growth > 0:
+        remaining = compact_ceiling - ctx_used
+        if growth > 0 and remaining > 0:
             tl = int(remaining / growth)
             c = color_ratio(1.0 - tl / 100 if tl < 100 else 0)
             turns_left = f"{c}~{tl}{RESET}"

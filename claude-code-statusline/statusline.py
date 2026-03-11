@@ -577,14 +577,20 @@ def main():
     # Per-turn token spend sparkline (relative to peak)
     sparkline_part = build_sparkline(metrics["context_history"])
 
-    # Compaction prediction (turns remaining)
+    # Compaction prediction (turns remaining until auto-compaction)
+    # Claude compacts at ~83% by default; user can override via env var
     compact_prediction = ""
     turns_since = metrics["turns_since_compact"]
     if turns_since >= 2 and ratio > 0 and ratio < 1.0:
+        compact_pct = 83
+        env_pct = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
+        if env_pct.isdigit() and 1 <= int(env_pct) <= 100:
+            compact_pct = int(env_pct)
+        compact_ceiling = CONTEXT_LIMIT * compact_pct / 100
         # Average context growth per turn since last compaction
         growth_per_turn = ctx_used / max(turns_since, 1)
-        remaining_tokens = CONTEXT_LIMIT - ctx_used
-        if growth_per_turn > 0:
+        remaining_tokens = compact_ceiling - ctx_used
+        if growth_per_turn > 0 and remaining_tokens > 0:
             turns_left = int(remaining_tokens / growth_per_turn)
             if turns_left <= 5:
                 pred_color = RED
