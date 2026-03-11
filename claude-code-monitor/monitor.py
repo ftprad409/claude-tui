@@ -15,6 +15,7 @@ Hotkeys:
 
 import json
 import os
+import re
 import select
 import shutil
 import textwrap
@@ -154,7 +155,7 @@ def parse_transcript(path):
         "context_history": [], "per_response": [],
         "tool_counts": Counter(), "tool_errors": 0, "tool_error_details": [],
         "files_read": Counter(), "files_edited": Counter(),
-        "thinking_count": 0, "subagent_count": 0, "turns_since_compact": 0,
+        "thinking_count": 0, "subagent_count": 0, "skill_count": 0, "turns_since_compact": 0,
         "recent_tools": [],  # last N tool calls for live trace
         "last_error_msg": "",
         # Current turn (current question/answer)
@@ -226,6 +227,14 @@ def parse_transcript(path):
                 r["turn_thinking"] = 0
                 r["turn_agents_spawned"] = 0
                 r["turn_agents_pending"] = set()
+
+            # Detect skill / slash command invocations
+            raw_content = obj.get("message", {}).get("content", "")
+            if isinstance(raw_content, str) and "<command-name>" in raw_content:
+                for m in re.finditer(r"<command-name>(/[^<]+)</command-name>", raw_content):
+                    skill_name = m.group(1)
+                    r["skill_count"] += 1
+                    r["event_log"].append((ts, f"skill: {skill_name}"))
 
         # Tool errors
         if etype == "user" and "message" in obj:
@@ -777,6 +786,8 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     session_stats = f"  {err_color}{r['tool_errors']}{RESET} {DIM}errors{RESET}  {DIM}│{RESET}  {GRAY}{r['thinking_count']}{RESET} {DIM}thinking ({think_pct:.0f}%){RESET}  {DIM}│{RESET}  {GRAY}{cache_pct}%{RESET} {DIM}cache{RESET}"
     if r["subagent_count"] > 0:
         session_stats += f"  {DIM}│{RESET}  {GRAY}{r['subagent_count']}{RESET} {DIM}agents{RESET}"
+    if r["skill_count"] > 0:
+        session_stats += f"  {DIM}│{RESET}  {GRAY}{r['skill_count']}{RESET} {DIM}skills{RESET}"
     lines.append(session_stats)
 
     return lines
@@ -1146,7 +1157,7 @@ def render_help_overlay(term_width):
     return lines
 
 
-FILTER_NAMES = ["all", "errors", "bash", "edits", "search", "agents", "compactions"]
+FILTER_NAMES = ["all", "errors", "bash", "edits", "search", "agents", "skills", "compactions"]
 
 FILTER_MATCHERS = {
     "all": lambda d: True,
@@ -1155,6 +1166,7 @@ FILTER_MATCHERS = {
     "edits": lambda d: any(w in d for w in ("edit ", "write ")),
     "search": lambda d: any(d.startswith(p) for p in ("grep:", "glob:", "read ")),
     "agents": lambda d: d.startswith("agent:"),
+    "skills": lambda d: d.startswith("skill:"),
     "compactions": lambda d: d.startswith("⚡"),
 }
 
