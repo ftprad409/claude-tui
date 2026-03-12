@@ -1754,9 +1754,10 @@ def main():
                             needs_full_redraw = True
                             cached_header = cached_log = None
                     elif key in ("l", "L"):
-                        if r and r.get("full_log"):
+                        if r is not None:
                             show_log_viewer(path, term_width)
                             needs_full_redraw = True
+                            cached_header = cached_log = None
                     elif key in ("e", "E"):
                         export_session(path, session_id)
                         needs_full_redraw = True
