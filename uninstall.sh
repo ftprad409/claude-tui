@@ -63,8 +63,12 @@ for p in ["/opt/homebrew/opt/claude-tui", "/opt/homebrew/Cellar/claude-tui",
           os.path.expanduser("~/.claude-ui")]:
     match_paths.add(p)
 
-with open(settings_file) as f:
-    settings = json.load(f)
+try:
+    with open(settings_file) as f:
+        settings = json.load(f)
+except (json.JSONDecodeError, ValueError) as e:
+    print(f"  \033[93m⚠\033[0m  settings.json is corrupted ({e}), skipping cleanup")
+    import sys; sys.exit(0)
 
 def is_our_command(cmd):
     # Match new PATH-based commands (claudetui statusline/hook)

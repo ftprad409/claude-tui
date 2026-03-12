@@ -5,7 +5,6 @@ import json
 import os
 import sys
 
-VERSION = "0.1.6"
 
 SETTINGS_PATH = os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
 CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".claude", "claudeui.json")
@@ -36,7 +35,6 @@ MAIN_HELP = f"""\
 
 {BOLD}Options:{RESET}
   {CYAN}-h{RESET}, {CYAN}--help{RESET}     Show this help message
-  {CYAN}-v{RESET}, {CYAN}--version{RESET}  Show version
 
 {BOLD}Examples:{RESET}
   claudetui mode                  {DIM}# show current mode{RESET}
@@ -686,8 +684,6 @@ def main():
 
     if cmd in ("-h", "--help"):
         print(MAIN_HELP)
-    elif cmd in ("-v", "--version"):
-        print(f"  claude-tui {BOLD}{VERSION}{RESET}")
     elif cmd == "full":
         set_mode("full")
     elif cmd == "compact":
