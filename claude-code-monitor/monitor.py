@@ -205,6 +205,7 @@ def parse_transcript(path):
     agent_labels = {}  # tool_use_id -> description
     current_turn = 0
     last_context = 0
+    context_at_last_compact = 0
     for line in lines:
         line = line.strip()
         if not line:
@@ -407,6 +408,8 @@ def parse_transcript(path):
                 r["tokens"]["output"] += out_t
                 ctx = inp_t + cache_r + cache_c + out_t
                 last_context = ctx
+                if context_at_last_compact == -1:
+                    context_at_last_compact = ctx
                 if out_t > 0:
                     r["context_history"].append(out_t)
                 r["per_response"].append({
@@ -426,7 +429,9 @@ def parse_transcript(path):
                 "turns_since_last": r["turns_since_compact"],
             })
             r["turns_since_compact"] = 0
+            context_at_last_compact = -1  # sentinel: next usage sets baseline
 
+    r["context_at_last_compact"] = context_at_last_compact
     r["subagent_count"] = len(subagents)
     r["last_context"] = last_context
     r["recent_tools"] = r["recent_tools"][-5:]
@@ -628,7 +633,9 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     compact_ceiling = CONTEXT_LIMIT * compact_pct / 100
     turns_left = "—"
     if r["turns_since_compact"] >= 2 and ratio > 0 and ratio < 1.0:
-        growth = ctx_used / max(r["turns_since_compact"], 1)
+        baseline = r.get("context_at_last_compact", 0)
+        growth_since = ctx_used - baseline if baseline > 0 else ctx_used
+        growth = growth_since / max(r["turns_since_compact"], 1)
         remaining = compact_ceiling - ctx_used
         if growth > 0 and remaining > 0:
             tl = int(remaining / growth)

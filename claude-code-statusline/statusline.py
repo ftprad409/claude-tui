@@ -280,6 +280,14 @@ def parse_transcript(transcript_path):
             )
             result["output_tokens_total"] += usage.get("output_tokens", 0)
 
+            # Capture post-compaction baseline from first usage after compact
+            if result["context_at_last_compact"] == -1:
+                keys = ["input_tokens", "cache_creation_input_tokens",
+                        "cache_read_input_tokens", "output_tokens"]
+                result["context_at_last_compact"] = sum(
+                    usage.get(k, 0) for k in keys
+                )
+
             # Per-turn token spend for sparkline
             out_tok = usage.get("output_tokens", 0)
             if out_tok > 0:
@@ -293,7 +301,7 @@ def parse_transcript(transcript_path):
             result["compact_count"] += 1
             result["context_history"].append(None)
             result["turns_since_compact"] = 0
-            result["context_at_last_compact"] = 0
+            result["context_at_last_compact"] = -1  # sentinel: next usage will set baseline
 
         # Tool calls, thinking, errors, files, and subagents
         if obj.get("type") == "assistant" and "message" in obj:
@@ -589,7 +597,9 @@ def main():
             compact_pct = int(env_pct)
         compact_ceiling = CONTEXT_LIMIT * compact_pct / 100
         # Average context growth per turn since last compaction
-        growth_per_turn = ctx_used / max(turns_since, 1)
+        baseline = metrics["context_at_last_compact"]
+        growth_since = ctx_used - baseline if baseline > 0 else ctx_used
+        growth_per_turn = growth_since / max(turns_since, 1)
         remaining_tokens = compact_ceiling - ctx_used
         if growth_per_turn > 0 and remaining_tokens > 0:
             turns_left = int(remaining_tokens / growth_per_turn)
