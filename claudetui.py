@@ -1,9 +1,28 @@
 #!/usr/bin/env python3
 """ClaudeTUI — unified CLI for Claude Code utilities."""
 import os
+import subprocess
 import sys
 
-VERSION = "0.3.0"
+_FALLBACK_VERSION = "0.3.5"
+
+
+def _get_version():
+    """Get version from git tag (clone/dev), fall back to hardcoded (curl/brew)."""
+    try:
+        v = subprocess.check_output(
+            ["git", "describe", "--tags", "--abbrev=0"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL,
+        ).decode().strip().lstrip("v")
+        if v:
+            return v
+    except Exception:
+        pass
+    return _FALLBACK_VERSION
+
+
+VERSION = _get_version()
 _RAW_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
