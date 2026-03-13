@@ -51,6 +51,13 @@ python3 claude-code-monitor/monitor.py abc12345
 
 # List recent sessions
 python3 claude-code-monitor/monitor.py --list
+
+# Efficiency chart (standalone)
+python3 claude-code-monitor/monitor.py --chart
+python3 claude-code-monitor/monitor.py --chart abc12345
+
+# Or via claudetui CLI
+claudetui chart
 ```
 
 Run it in a separate terminal while Claude Code is working.
@@ -62,6 +69,7 @@ Run it in a separate terminal while Claude Code is working.
 | `s` | Run **session-stats** — full cost breakdown, token sparkline, tool usage |
 | `d` | Run **session-manager show** — detailed session view |
 | `l` | **Event log** — scrollable log with filtering and live auto-scroll |
+| `w` | **Efficiency chart** — token waste per segment, `v` to toggle horizontal/vertical |
 | `e` | **Export** session as markdown file |
 | `o` | Run **session-manager list** — browse sessions for this project |
 | `c` | **Settings panel** — compaction threshold, auto-compact toggle, sparkline config |
@@ -95,6 +103,9 @@ Press any key after viewing a report to return to the live dashboard.
 - **Compaction prediction** — estimated turns until next auto-compaction
 - **Agent tracking** — logs agent/subagent spawns and completions in the event log; CURRENT section shows active/total agents per turn
 - **Skill tracking** — logs skill and slash command invocations in the event log; CURRENT section shows active skill while running
+- **Efficiency chart** — `w` hotkey or `claudetui chart` standalone; horizontal/vertical bar chart showing useful (green), rebuild (yellow), and headroom (gray) per segment with compaction details
+- **Context efficiency score** — real-time percentage showing useful vs wasted tokens (headroom + rebuild overhead)
+- **EMA compaction predictor** — exponential moving average weighted on recent user turns for more accurate "turns left" prediction
 
 ## Settings
 
@@ -113,6 +124,14 @@ Shared config file at `~/.claude/claudeui.json` (hot-reloads while running):
 |---------|--------|-------------|
 | `sparkline.mode` | `"tail"` (default), `"merge"` | `tail` shows last N turns at full resolution; `merge` combines turns into buckets |
 | `sparkline.merge_size` | number (default: `2`) | How many turns to merge per bar in merge mode |
+
+## Testing
+
+```bash
+python3 claude-code-monitor/test_monitor.py -v
+```
+
+33 tests covering transcript parsing, waste model, segment building, chart rendering, and format helpers.
 
 ## Requirements
 

@@ -58,9 +58,11 @@ Live session dashboard for a separate terminal. Single-file script.
 
 - Entry point: `claude-code-monitor/monitor.py`
 - Self-contained — all parsing inlined, no imports from other tools
+- Tests: `claude-code-monitor/test_monitor.py` (run with `python3 -v`)
 - Watches transcript file for changes, refreshes on file change
-- Args: none (auto-detect), `<session-id>`, or `--list`
-- Hotkeys: `s` stats, `d` details, `l` log viewer, `e` export, `o` sessions, `c` config, `?` help
+- Args: none (auto-detect), `<session-id>`, `--list`, or `--chart [session-id]`
+- Hotkeys: `s` stats, `d` details, `l` log viewer, `w` efficiency chart, `e` export, `o` sessions, `c` config, `?` help
+- Efficiency chart: `w` hotkey or `claudetui chart` standalone — horizontal/vertical bar chart showing useful/rebuild/headroom per segment
 - Log viewer: `f` cycles filter (all/errors/bash/edits/search/agents/skills/compactions), `a` toggles live auto-scroll
 - Agent tracking: logs spawns/completions in event log; CURRENT section shows active/total agents per turn
 - Skill tracking: logs skill invocations in event log; CURRENT section shows active skill while running
@@ -81,6 +83,14 @@ Claude Code hooks for automatic in-session context. Three hook scripts:
 - Settings: `sparkline.mode` (`"tail"` or `"merge"`), `sparkline.merge_size` (turns per bar, default: 2), `monitor.log_lines` (0–50, default: 8, 0 = off)
 - Config loader: `load_settings()` / `get_setting(*keys, default=...)` in each tool (self-contained, no shared imports)
 
+## Testing
+
+```bash
+python3 claude-code-monitor/test_monitor.py -v
+```
+
+Tests cover: transcript parsing, waste model (headroom + rebuild), segment building, chart rendering (horizontal/vertical), and format helpers. Run before and after refactoring to verify no regressions.
+
 ## Local Development
 
 To test local changes to the statusline or hooks, update `~/.claude/settings.json` to point to your local repo instead of the installed path:
@@ -99,6 +109,7 @@ The same applies to hook commands — replace the installed path with your local
 `claudetui` and its subcommands can be tested directly without changing settings:
 ```bash
 python3 claudetui.py monitor         # test the monitor
+python3 claudetui.py chart           # test efficiency chart standalone
 python3 claudetui.py mode custom     # test the configurator TUI
 python3 claudetui.py mode --help     # test CLI
 python3 claudetui.py --help          # test dispatcher
