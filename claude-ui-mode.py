@@ -67,7 +67,7 @@ CUSTOM_HELP = f"""\
 
 {BOLD}Components:{RESET}
   {DIM}Line 1:{RESET} model, context_bar, token_count, compact_prediction,
-          sparkline, cost, duration, compact_count, session_id
+          sparkline, cost, duration, compact_count, efficiency, session_id
   {DIM}Line 2:{RESET} cwd, git_branch, turns, files, errors, cache,
           thinking, cost_per_turn, agents
   {DIM}Line 3:{RESET} tool_trace, file_edits
@@ -150,6 +150,7 @@ COMPONENTS = [
     ("cost",               "line1", "Cost",            "$2.34",                              4),
     ("duration",           "line1", "Duration",        "12m",                                0),
     ("compact_count",      "line1", "Compact count",   "0x compact",                         3),
+    ("efficiency",         "line1", "Efficiency",      "92% eff",                            1),
     ("session_id",         "line1", "Session ID",      "#a1b2c3d4",                          0),
     ("cwd",                "line2", "Directory",       os.path.basename(os.getcwd()),         0),
     ("git_branch",         "line2", "Git branch",      "main +42 -17",                       3),
@@ -183,7 +184,7 @@ PRESETS = {
     "minimal": {
         "line1": {"model": False, "token_count": False, "cost": False,
                   "compact_prediction": False, "compact_count": False,
-                  "session_id": False},
+                  "efficiency": False, "session_id": False},
         "line2": {"cwd": False, "git_branch": False, "cache": False,
                   "cost_per_turn": False, "agents": False, "thinking": False,
                   "files": False},

@@ -187,9 +187,9 @@ def parse_transcript(path):
         "path": path, "model": "", "session_id": Path(path).stem[:8],
         "start_time": None, "end_time": None,
         "turns": 0, "responses": 0,
-        "compact_count": 0, "compact_events": [],
+        "compact_count": 0, "compact_events": [], "tokens_wasted": 0, "total_context_built": 0,
         "tokens": {"input": 0, "cache_read": 0, "cache_creation": 0, "output": 0},
-        "context_history": [], "per_response": [],
+        "context_history": [], "per_response": [], "context_per_turn": {},
         "tool_counts": Counter(), "tool_errors": 0, "tool_error_details": [],
         "files_read": Counter(), "files_edited": Counter(),
         "thinking_count": 0, "subagent_count": 0, "skill_count": 0, "turns_since_compact": 0,
@@ -426,6 +426,15 @@ def parse_transcript(path):
                 last_context = ctx
                 if context_at_last_compact == -1:
                     context_at_last_compact = ctx
+                    # Compute waste from previous compaction
+                    if r["compact_events"]:
+                        pre = r["compact_events"][-1]["context_before"]
+                        if pre > 0:
+                            wasted = pre - ctx
+                            if wasted > 0:
+                                r["tokens_wasted"] += wasted
+                # Track per-turn context (last snapshot per turn wins)
+                r["context_per_turn"][current_turn] = ctx
                 if out_t > 0:
                     r["context_history"].append(out_t)
                 r["per_response"].append({
@@ -437,6 +446,7 @@ def parse_transcript(path):
         if (etype == "summary" or
                 (etype == "system" and obj.get("subtype") == "compact_boundary")):
             r["compact_count"] += 1
+            r["total_context_built"] += last_context
             r["context_history"].append(None)
             r["event_log"].append((ts, f"⚡ compaction #{r['compact_count']}"))
             r["compact_events"].append({
@@ -445,6 +455,7 @@ def parse_transcript(path):
                 "turns_since_last": r["turns_since_compact"],
             })
             r["turns_since_compact"] = 0
+            r["context_per_turn"] = {}  # reset per-turn tracking
             context_at_last_compact = -1  # sentinel: next usage sets baseline
 
     r["context_at_last_compact"] = context_at_last_compact
@@ -641,7 +652,7 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     spark_width = max(20, min(w - 10, 80))
     sparkline = build_sparkline(r["context_history"], spark_width)
 
-    # Compaction prediction (turns until auto-compaction, not full limit)
+    # Compaction prediction (EMA-weighted growth rate)
     compact_pct = 83
     env_pct = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
     if env_pct.isdigit() and 1 <= int(env_pct) <= 100:
@@ -649,10 +660,28 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     compact_ceiling = CONTEXT_LIMIT * compact_pct / 100
     turns_left = "—"
     if r["turns_since_compact"] >= 2 and ratio > 0 and ratio < 1.0:
-        baseline = r.get("context_at_last_compact", 0)
-        growth_since = ctx_used - baseline if baseline > 0 else ctx_used
-        growth = growth_since / max(r["turns_since_compact"], 1)
         remaining = compact_ceiling - ctx_used
+
+        # EMA on per-turn context deltas (since last compaction)
+        turn_contexts = list(r["context_per_turn"].values())
+        if len(turn_contexts) >= 3:
+            deltas = [turn_contexts[i] - turn_contexts[i - 1]
+                      for i in range(1, len(turn_contexts))
+                      if turn_contexts[i] > turn_contexts[i - 1]]
+            if deltas:
+                alpha = 2 / (min(len(deltas), 5) + 1)
+                ema = deltas[0]
+                for d in deltas[1:]:
+                    ema = alpha * d + (1 - alpha) * ema
+                growth = ema
+            else:
+                growth = 0
+        else:
+            # Fallback to simple average
+            baseline = r.get("context_at_last_compact", 0)
+            growth_since = ctx_used - baseline if baseline > 0 else ctx_used
+            growth = growth_since / max(r["turns_since_compact"], 1)
+
         if growth > 0 and remaining > 0:
             tl = int(remaining / growth)
             c = color_ratio(1.0 - tl / 100 if tl < 100 else 0)
@@ -744,6 +773,24 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
             compact_line += f"  {BOLD}{YELLOW}⚡ JUST COMPACTED{RESET}"
 
     lines.append(compact_line)
+
+    # Context efficiency score
+    total_built = r["total_context_built"] + ctx_used  # all segments + current
+    if total_built > 0:
+        wasted = r["tokens_wasted"]
+        eff = max(0, 1 - wasted / total_built) if wasted > 0 else 1.0
+        eff_pct = int(eff * 100)
+        if eff_pct >= 90:
+            eff_color = GREEN
+        elif eff_pct >= 70:
+            eff_color = YELLOW
+        elif eff_pct >= 50:
+            eff_color = ORANGE
+        else:
+            eff_color = RED
+        wasted_str = format_tokens(int(wasted)) if wasted > 0 else "0"
+        total_str = format_tokens(int(total_built))
+        lines.append(f"  {DIM}Efficiency:{RESET} {eff_color}{eff_pct}%{RESET}  {DIM}│{RESET}  {DIM}Wasted:{RESET} {RED}{wasted_str}{RESET}{DIM}/{RESET}{GRAY}{total_str}{RESET}")
     lines.append("")
 
     # Cost section

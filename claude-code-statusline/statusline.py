@@ -242,10 +242,14 @@ def parse_transcript(transcript_path):
         "turn_count": 0,
         "thinking_count": 0,
         "context_history": [],
+        "context_per_turn": [],   # cumulative context at each turn (since last compact)
+        "tokens_wasted": 0,       # tokens lost to compaction overhead
+        "total_context_built": 0, # sum of peak context per segment (for efficiency calc)
         "recent_tools": [],
         "current_turn_file_edits": {},
         "turns_since_compact": 0,
         "context_at_last_compact": 0,
+        "_pre_compact_ctx": 0,    # context just before compaction (internal)
     }
 
     try:
@@ -339,13 +343,27 @@ def parse_transcript(transcript_path):
             )
             result["output_tokens_total"] += usage.get("output_tokens", 0)
 
+            # Per-response context snapshot
+            keys_ctx = ["input_tokens", "cache_creation_input_tokens",
+                        "cache_read_input_tokens", "output_tokens"]
+            ctx_snapshot = sum(usage.get(k, 0) for k in keys_ctx)
+            result["_pre_compact_ctx"] = ctx_snapshot
+
             # Capture post-compaction baseline from first usage after compact
             if result["context_at_last_compact"] == -1:
-                keys = ["input_tokens", "cache_creation_input_tokens",
-                        "cache_read_input_tokens", "output_tokens"]
-                result["context_at_last_compact"] = sum(
-                    usage.get(k, 0) for k in keys
-                )
+                result["context_at_last_compact"] = ctx_snapshot
+                # Record waste: pre-compact context minus post-compact rebuild
+                if result["compact_count"] > 0 and result.get("_ctx_before_compact", 0) > 0:
+                    wasted = result["_ctx_before_compact"] - ctx_snapshot
+                    if wasted > 0:
+                        result["tokens_wasted"] += wasted
+
+            # Track per-turn context growth (last snapshot per turn wins)
+            turn = result["turn_count"]
+            if result["context_per_turn"] and result["context_per_turn"][-1][0] == turn:
+                result["context_per_turn"][-1] = (turn, ctx_snapshot)
+            else:
+                result["context_per_turn"].append((turn, ctx_snapshot))
 
             # Per-turn token spend for sparkline
             out_tok = usage.get("output_tokens", 0)
@@ -359,8 +377,11 @@ def parse_transcript(transcript_path):
         ):
             result["compact_count"] += 1
             result["context_history"].append(None)
+            result["_ctx_before_compact"] = result["_pre_compact_ctx"]
+            result["total_context_built"] += result["_pre_compact_ctx"]
             result["turns_since_compact"] = 0
             result["context_at_last_compact"] = -1  # sentinel: next usage will set baseline
+            result["context_per_turn"] = []  # reset per-turn tracking
 
         # Tool calls, thinking, errors, files, and subagents
         if obj.get("type") == "assistant" and "message" in obj:
@@ -646,7 +667,7 @@ def main():
     sparkline_part = build_sparkline(metrics["context_history"])
 
     # Compaction prediction (turns remaining until auto-compaction)
-    # Claude compacts at ~83% by default; user can override via env var
+    # Uses EMA (exponential moving average) for recent-weighted growth rate
     compact_prediction = ""
     turns_since = metrics["turns_since_compact"]
     if turns_since >= 2 and ratio > 0 and ratio < 1.0:
@@ -655,11 +676,28 @@ def main():
         if env_pct.isdigit() and 1 <= int(env_pct) <= 100:
             compact_pct = int(env_pct)
         compact_ceiling = CONTEXT_LIMIT * compact_pct / 100
-        # Average context growth per turn since last compaction
-        baseline = metrics["context_at_last_compact"]
-        growth_since = ctx_used - baseline if baseline > 0 else ctx_used
-        growth_per_turn = growth_since / max(turns_since, 1)
         remaining_tokens = compact_ceiling - ctx_used
+
+        # Compute growth rate using EMA on per-turn context deltas
+        turn_contexts = [ctx for _, ctx in metrics["context_per_turn"]]
+        if len(turn_contexts) >= 3:
+            deltas = [turn_contexts[i] - turn_contexts[i - 1]
+                      for i in range(1, len(turn_contexts))
+                      if turn_contexts[i] > turn_contexts[i - 1]]
+            if deltas:
+                alpha = 2 / (min(len(deltas), 5) + 1)
+                ema = deltas[0]
+                for d in deltas[1:]:
+                    ema = alpha * d + (1 - alpha) * ema
+                growth_per_turn = ema
+            else:
+                growth_per_turn = 0
+        else:
+            # Fallback to simple average when not enough data
+            baseline = metrics["context_at_last_compact"]
+            growth_since = ctx_used - baseline if baseline > 0 else ctx_used
+            growth_per_turn = growth_since / max(turns_since, 1)
+
         if growth_per_turn > 0 and remaining_tokens > 0:
             turns_left = int(remaining_tokens / growth_per_turn)
             if turns_left <= 5:
@@ -673,6 +711,23 @@ def main():
             compact_prediction = (
                 f"{pred_color}~{turns_left}{RESET} {GRAY}turns left{RESET}"
             )
+
+    # Context efficiency score
+    efficiency_part = ""
+    total_built = metrics["total_context_built"] + ctx_used  # all segments + current
+    if is_visible("line1", "efficiency") and total_built > 0:
+        wasted = metrics["tokens_wasted"]
+        eff = max(0, 1 - wasted / total_built) if wasted > 0 else 1.0
+        eff_pct = int(eff * 100)
+        if eff_pct >= 90:
+            eff_color = GREEN
+        elif eff_pct >= 70:
+            eff_color = YELLOW
+        elif eff_pct >= 50:
+            eff_color = ORANGE
+        else:
+            eff_color = RED
+        efficiency_part = f"{eff_color}{eff_pct}%{RESET} {GRAY}eff{RESET}"
 
     dim = GRAY
     sep = f" {dim}│{RESET} "
@@ -705,6 +760,8 @@ def main():
         line1_parts.append(
             f"{CYAN}{metrics['compact_count']}{RESET}{dim}x{RESET}compact"
         )
+    if efficiency_part:
+        line1_parts.append(efficiency_part)
     if is_visible("line1", "session_id"):
         line1_parts.append(f"{dim}#{RESET}{GRAY}{session_id}{RESET}")
 
@@ -826,6 +883,8 @@ def main():
             )
         if metrics["tool_errors"] > 0 and is_visible("line2", "errors"):
             compact_parts.append(error_part)
+        if efficiency_part:
+            compact_parts.append(efficiency_part)
         if compact_parts:
             print(f" {sep.join(compact_parts)}")
         return
