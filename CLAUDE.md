@@ -54,15 +54,16 @@ Custom slash commands for in-session analytics. Markdown files installed to `~/.
 
 ### claude-code-monitor
 
-Live session dashboard for a separate terminal. Single-file script.
+Live session dashboard for a separate terminal.
 
 - Entry point: `claude-code-monitor/monitor.py`
-- Self-contained — all parsing inlined, no imports from other tools
+- Shared library: `claude-code-monitor/lib.py` (transcript parsing, formatting, constants, pricing)
+- Chart module: `claude-code-monitor/chart.py` (efficiency chart rendering and segment building)
 - Tests: `claude-code-monitor/test_monitor.py` (run with `python3 -v`)
 - Watches transcript file for changes, refreshes on file change
 - Args: none (auto-detect), `<session-id>`, `--list`, or `--chart [session-id]`
 - Hotkeys: `s` stats, `d` details, `l` log viewer, `w` efficiency chart, `e` export, `o` sessions, `c` config, `?` help
-- Efficiency chart: `w` hotkey or `claudetui chart` standalone — horizontal/vertical bar chart showing useful/rebuild/headroom per segment
+- Efficiency chart: `w` hotkey or `claudetui chart` standalone — 4-component bar chart: system (cyan), summary (yellow), useful (green), headroom (gray). Press `?` for info overlay. Live updates via transcript file polling
 - Log viewer: `f` cycles filter (all/errors/bash/edits/search/agents/skills/compactions), `a` toggles live auto-scroll
 - Agent tracking: logs spawns/completions in event log; CURRENT section shows active/total agents per turn
 - Skill tracking: logs skill invocations in event log; CURRENT section shows active skill while running
@@ -81,7 +82,7 @@ Claude Code hooks for automatic in-session context. Three hook scripts:
 - Config file: `~/.claude/claudeui.json` — shared between statusline and monitor
 - Hot-reloads: both tools re-read on file change, no restart needed
 - Settings: `sparkline.mode` (`"tail"` or `"merge"`), `sparkline.merge_size` (turns per bar, default: 2), `monitor.log_lines` (0–50, default: 8, 0 = off)
-- Config loader: `load_settings()` / `get_setting(*keys, default=...)` in each tool (self-contained, no shared imports)
+- Config loader: `load_settings()` / `get_setting(*keys, default=...)` in each tool (statusline is self-contained; monitor imports from `lib.py`)
 
 ## Testing
 
@@ -89,7 +90,7 @@ Claude Code hooks for automatic in-session context. Three hook scripts:
 python3 claude-code-monitor/test_monitor.py -v
 ```
 
-Tests cover: transcript parsing, waste model (headroom + rebuild), segment building, chart rendering (horizontal/vertical), and format helpers. Run before and after refactoring to verify no regressions.
+Tests cover: transcript parsing, waste model (headroom + summary), segment building, chart rendering (horizontal/vertical), and format helpers. Run before and after refactoring to verify no regressions.
 
 ## Local Development
 

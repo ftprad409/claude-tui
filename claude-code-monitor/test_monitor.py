@@ -51,9 +51,9 @@ class TestBuildSegments(unittest.TestCase):
             "last_context": 80_000,
             "system_prompt_tokens": 0,
         }
-        segs, comps = _build_segments(r)
+        segs, n_comp = _build_segments(r)
         self.assertEqual(len(segs), 1)
-        self.assertEqual(len(comps), 0)
+        self.assertEqual(n_comp, 0)
         seg = segs[0]
         self.assertTrue(seg["active"])
         self.assertEqual(seg["peak"], 80_000)
@@ -69,9 +69,9 @@ class TestBuildSegments(unittest.TestCase):
             "last_context": 0,
             "system_prompt_tokens": 0,
         }
-        segs, comps = _build_segments(r)
+        segs, n_comp = _build_segments(r)
         self.assertEqual(len(segs), 0)
-        self.assertEqual(len(comps), 0)
+        self.assertEqual(n_comp, 0)
 
     def test_one_compaction(self):
         """Single compaction: Seg 1 (completed) + Seg 2 (active)."""
@@ -83,25 +83,22 @@ class TestBuildSegments(unittest.TestCase):
             "last_context": 80_000,
             "system_prompt_tokens": self.SYS_PROMPT,
         }
-        segs, comps = _build_segments(r)
+        segs, n_comp = _build_segments(r)
 
         # Two segments: one completed, one active
         self.assertEqual(len(segs), 2)
-        self.assertEqual(len(comps), 1)
+        self.assertEqual(n_comp, 1)
 
         # Seg 1: system prompt + useful (first segment, no summary)
         s1 = segs[0]
         self.assertEqual(s1["peak"], 167_000)
         self.assertEqual(s1["system"], self.SYS_PROMPT)
         self.assertEqual(s1["summary"], 0)
-        self.assertEqual(s1["useful"], 167_000)  # useful = peak - prev_rebuild(0)
+        self.assertEqual(s1["useful"], 167_000 - self.SYS_PROMPT)  # peak - system (no summary)
         self.assertEqual(s1["headroom"], CONTEXT_LIMIT - 167_000)
         self.assertNotIn("active", s1)
 
-        # Compaction: lost + survived
-        c1 = comps[0]
-        self.assertEqual(c1["survived"], 33_100)
-        self.assertEqual(c1["lost"], 167_000 - 33_100)
+        self.assertEqual(n_comp, 1)
 
         # Seg 2: active, system + summary + useful
         s2 = segs[1]
@@ -124,14 +121,14 @@ class TestBuildSegments(unittest.TestCase):
             "last_context": 50_000,
             "system_prompt_tokens": self.SYS_PROMPT,
         }
-        segs, comps = _build_segments(r)
+        segs, n_comp = _build_segments(r)
         self.assertEqual(len(segs), 3)
-        self.assertEqual(len(comps), 2)
+        self.assertEqual(n_comp, 2)
 
         # Seg 1: system + useful, no summary
         self.assertEqual(segs[0]["system"], self.SYS_PROMPT)
         self.assertEqual(segs[0]["summary"], 0)
-        self.assertEqual(segs[0]["useful"], 167_000)
+        self.assertEqual(segs[0]["useful"], 167_000 - self.SYS_PROMPT)
         self.assertEqual(segs[0]["headroom"], CONTEXT_LIMIT - 167_000)
 
         # Seg 2: system + summary from compaction 1 + useful
@@ -157,21 +154,23 @@ class TestBuildSegments(unittest.TestCase):
             "system_prompt_tokens": self.SYS_PROMPT,
         }
         segs, _ = _build_segments(r)
+        # useful = last_context - system - summary = 33100 - 14328 - 18772 = 0
         self.assertEqual(segs[1]["useful"], 0)
 
     def test_compaction_without_context_after(self):
-        """Compaction event missing context_after defaults to 0."""
+        """Compaction event missing context_after — no active segment yet."""
         r = {
             "compact_events": [
-                {"context_before": 167_000},  # no context_after
+                {"context_before": 167_000},  # no context_after — not resolved
             ],
             "last_context": 50_000,
             "system_prompt_tokens": self.SYS_PROMPT,
         }
-        segs, comps = _build_segments(r)
-        self.assertEqual(comps[0]["survived"], 0)
-        self.assertEqual(comps[0]["lost"], 0)  # survived=0 → lost guard
-        self.assertEqual(segs[1]["summary"], 0)
+        segs, n_comp = _build_segments(r)
+        self.assertEqual(n_comp, 1)
+        # Only Seg 1 (completed), no active segment — last_context is stale
+        self.assertEqual(len(segs), 1)
+        self.assertNotIn("active", segs[0])
 
 
 # ── Waste model ───────────────────────────────────────────────────────
@@ -256,8 +255,8 @@ class TestHorizontalChart(unittest.TestCase):
             "last_context": last_context,
             "system_prompt_tokens": self.SYS_PROMPT,
         }
-        segs, comps = _build_segments(r)
-        return [strip_ansi(l) for l in _render_horizontal_chart(segs, comps, width)]
+        segs, n_comp = _build_segments(r)
+        return [strip_ansi(l) for l in _render_horizontal_chart(segs, n_comp, width)]
 
     def test_header_and_legend(self):
         lines = self._get_lines(
@@ -309,8 +308,8 @@ class TestHorizontalChart(unittest.TestCase):
     def test_no_compactions(self):
         """Single active segment, no compactions — no crash."""
         r = {"compact_events": [], "last_context": 80_000, "system_prompt_tokens": 0}
-        segs, comps = _build_segments(r)
-        lines = _render_horizontal_chart(segs, comps, 100)
+        segs, n_comp = _build_segments(r)
+        lines = _render_horizontal_chart(segs, n_comp, 100)
         clean = [strip_ansi(l) for l in lines]
         self.assertTrue(any("Seg 1" in l for l in clean))
         # No compaction markers
@@ -372,8 +371,8 @@ class TestVerticalChart(unittest.TestCase):
             "last_context": last_context,
             "system_prompt_tokens": self.SYS_PROMPT,
         }
-        segs, comps = _build_segments(r)
-        return [strip_ansi(l) for l in _render_vertical_chart(segs, comps, width, height)]
+        segs, n_comp = _build_segments(r)
+        return [strip_ansi(l) for l in _render_vertical_chart(segs, n_comp, width, height)]
 
     def test_header_and_legend(self):
         lines = self._get_lines(
@@ -412,8 +411,8 @@ class TestVerticalChart(unittest.TestCase):
     def test_no_compactions(self):
         """Single active segment — no crash."""
         r = {"compact_events": [], "last_context": 80_000, "system_prompt_tokens": 0}
-        segs, comps = _build_segments(r)
-        lines = _render_vertical_chart(segs, comps, 80, 30)
+        segs, n_comp = _build_segments(r)
+        lines = _render_vertical_chart(segs, n_comp, 80, 30)
         self.assertTrue(len(lines) > 0)
 
 

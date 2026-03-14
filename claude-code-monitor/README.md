@@ -2,6 +2,8 @@
 
 A standalone terminal dashboard that monitors your active Claude Code session in real time.
 
+![Session Dashboard](../assets/session-dashboard.png)
+
 ```
 1001000110100101101001011001101001100101101001011001101001100101
 ────────────────────────────────────────────────────────────
@@ -103,8 +105,8 @@ Press any key after viewing a report to return to the live dashboard.
 - **Compaction prediction** — estimated turns until next auto-compaction
 - **Agent tracking** — logs agent/subagent spawns and completions in the event log; CURRENT section shows active/total agents per turn
 - **Skill tracking** — logs skill and slash command invocations in the event log; CURRENT section shows active skill while running
-- **Efficiency chart** — `w` hotkey or `claudetui chart` standalone; horizontal/vertical bar chart showing useful (green), rebuild (yellow), and headroom (gray) per segment with compaction details
-- **Context efficiency score** — real-time percentage showing useful vs wasted tokens (headroom + rebuild overhead)
+- **Efficiency chart** — `w` hotkey or `claudetui chart` standalone; horizontal/vertical bar chart showing 4-component token breakdown per segment: system (cyan), summary (yellow), useful (green), headroom (gray). Press `?` for metric explanations. Live updates as the session progresses
+- **Context efficiency score** — real-time percentage showing useful vs wasted tokens (summaries + headroom)
 - **EMA compaction predictor** — exponential moving average weighted on recent user turns for more accurate "turns left" prediction
 
 ## Settings
@@ -131,7 +133,7 @@ Shared config file at `~/.claude/claudeui.json` (hot-reloads while running):
 python3 claude-code-monitor/test_monitor.py -v
 ```
 
-33 tests covering transcript parsing, waste model, segment building, chart rendering, and format helpers.
+35 tests covering transcript parsing, waste model, segment building, chart rendering, and format helpers.
 
 ## Requirements
 

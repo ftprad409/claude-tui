@@ -41,18 +41,15 @@ def _build_segments(r):
       - peak: total context at end of segment
     """
     segments = []
-    compactions = []
+    num_compactions = 0
     sys_prompt = r.get("system_prompt_tokens", 0)
     prev_rebuild = 0
     prev_system = sys_prompt  # first segment also has system prompt
     for evt in r["compact_events"]:
         peak = evt["context_before"]
-        survived = evt.get("context_after", 0)
-        lost = peak - survived if survived > 0 else 0
-        useful = peak - prev_rebuild  # new work added in this segment
         headroom = max(0, CONTEXT_LIMIT - peak)
-        # Split rebuild into system prompt + compaction summary
         summary = max(0, prev_rebuild - prev_system)
+        useful = peak - prev_system - summary  # exclude system & summary shown separately
         segments.append({
             "peak": peak,
             "useful": max(useful, 0),
@@ -60,31 +57,28 @@ def _build_segments(r):
             "summary": summary,
             "headroom": headroom,
         })
-        compactions.append({
-            "lost": max(lost, 0),
-            "survived": survived,
-        })
-        prev_rebuild = survived
+        num_compactions += 1
+        prev_rebuild = evt.get("context_after", 0)
         prev_system = evt.get("system_prompt", sys_prompt)
-    # Current (active) segment
+    # Current (active) segment — only if post-compaction data exists
     current = r["last_context"]
-    if current > 0:
-        useful = current - prev_rebuild
-        summary = max(0, prev_rebuild - prev_system) if prev_rebuild > 0 else 0
+    if current > 0 and (num_compactions == 0 or prev_rebuild > 0):
+        summary = max(0, prev_rebuild - prev_system)
+        useful = current - prev_system - summary
         segments.append({
             "peak": current,
             "useful": max(useful, 0),
-            "system": prev_system if prev_rebuild > 0 else sys_prompt,
+            "system": prev_system,
             "summary": summary,
             "headroom": 0,  # active segment — still growing
             "active": True,
         })
-    return segments, compactions
+    return segments, num_compactions
 
 
 # ── Horizontal chart ──────────────────────────────────────────────────
 
-def _render_horizontal_chart(segments, compactions, w):
+def _render_horizontal_chart(segments, num_compactions, w):
     """Render horizontal bar chart of segments."""
     lines = []
     # Scale all bars to CONTEXT_LIMIT so completed segments show full width
@@ -99,7 +93,7 @@ def _render_horizontal_chart(segments, compactions, w):
     for i, seg in enumerate(segments):
         is_active = seg.get("active", False)
         label = f"{'→ ' if is_active else '  '}Seg {i + 1}"
-        has_compaction = i < len(compactions)
+        has_compaction = i < num_compactions
 
         system_t = seg["system"]
         summary_t = seg["summary"]
@@ -170,7 +164,7 @@ def _render_horizontal_chart(segments, compactions, w):
 
 # ── Vertical chart ────────────────────────────────────────────────────
 
-def _render_vertical_chart(segments, compactions, w, h):
+def _render_vertical_chart(segments, num_compactions, w, h):
     """Render vertical stacked bar chart of segments."""
     lines = []
     scale_ref = CONTEXT_LIMIT
@@ -315,7 +309,7 @@ def show_efficiency_chart(r, term_width, transcript_path=None):
             pass
 
     # Initial build
-    segments, compactions = _build_segments(r)
+    segments, num_compactions = _build_segments(r)
     if not segments:
         return
     total_wasted = r["tokens_wasted"]
@@ -332,7 +326,7 @@ def show_efficiency_chart(r, term_width, transcript_path=None):
             if mtime != last_mtime:
                 last_mtime = mtime
                 r = parse_transcript(transcript_path)
-                segments, compactions = _build_segments(r)
+                segments, num_compactions = _build_segments(r)
                 if not segments:
                     return
                 total_wasted = r["tokens_wasted"]
@@ -344,9 +338,9 @@ def show_efficiency_chart(r, term_width, transcript_path=None):
         w = term_width - 2
 
         if mode == "horizontal":
-            lines.extend(_render_horizontal_chart(segments, compactions, w))
+            lines.extend(_render_horizontal_chart(segments, num_compactions, w))
         else:
-            lines.extend(_render_vertical_chart(segments, compactions, w, term_height))
+            lines.extend(_render_vertical_chart(segments, num_compactions, w, term_height))
 
         # Summary
         lines.append("")

@@ -57,11 +57,12 @@ After install:
 ```bash
 claude                    # statusline + hooks work automatically
 claudetui monitor         # live dashboard in a second terminal
+claudetui chart           # context efficiency chart
 claudetui stats           # post-session analytics
 claudetui sessions list   # browse all sessions
 claudetui mode compact    # switch to 1-line statusline
 claudetui mode full       # switch to 3-line statusline
-claudetui mode custom  # interactive configurator
+claudetui mode custom     # interactive configurator
 # inside Claude Code:
 /tui:session           # deep session report
 /tui:cost              # cost breakdown
@@ -224,10 +225,13 @@ Custom slash commands for deep session analytics on demand. Install to `~/.claud
 
 Live session dashboard for a separate terminal. Live duration, activity status, cost burn rate, tool trace, error details, auto-follow, and interactive hotkeys — all in the alternate screen buffer.
 
+![Session Dashboard](assets/session-dashboard.png)
+
 ```bash
 python3 claude-code-monitor/monitor.py           # auto-detect active session
 python3 claude-code-monitor/monitor.py --list     # list recent sessions
-# While running: stats  details  log  export  sessions  config  ?help  quit
+claudetui chart                                   # context efficiency chart (standalone)
+# While running: stats  details  log  chart  export  sessions  config  ?help  quit
 ```
 
 ### [claude-code-hooks](./claude-code-hooks/)
