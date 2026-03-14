@@ -16,7 +16,6 @@ Hotkeys:
 
 import json
 import os
-import re
 import select
 import shutil
 import textwrap
@@ -27,507 +26,26 @@ import threading
 import time
 import tty
 import signal
-from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-_ANSI_RE = re.compile(r'\033\[[0-9;]*m')
+from lib import (
+    _visible_len, _truncate_ansi, _visual_rows,
+    load_settings, get_setting, reset_settings_cache,
+    MODEL_PRICING, CONTEXT_LIMIT,
+    RESET, BOLD, DIM, GREEN, YELLOW, ORANGE, RED, CYAN, MAGENTA, WHITE, GRAY,
+    CLEAR, HIDE_CURSOR, SHOW_CURSOR, ERASE_LINE, ALT_SCREEN_ON, ALT_SCREEN_OFF,
+    LOGO_GREEN, M_DARK, M_MID, M_BRIGHT, PULSE_NEW, PULSE_IDLE,
+    find_transcript, find_latest_transcript, find_session_by_id,
+    parse_transcript, get_pricing, calc_cost, efficiency_color,
+    format_duration_live, format_event_time, format_tokens, get_terminal_width,
+)
+from chart import (
+    _build_segments, _render_horizontal_chart, _render_vertical_chart,
+    show_efficiency_chart, run_standalone as _run_chart_standalone,
+)
 
-
-def _visible_len(s):
-    """Length of string after stripping ANSI escape codes."""
-    return len(_ANSI_RE.sub('', s))
-
-
-def _truncate_ansi(s, max_visible):
-    """Truncate an ANSI-colored string to max_visible characters."""
-    visible = 0
-    i = 0
-    while i < len(s) and visible < max_visible:
-        if s[i] == '\033' and i + 1 < len(s) and s[i + 1] == '[':
-            j = i + 2
-            while j < len(s) and s[j] != 'm':
-                j += 1
-            i = j + 1
-        else:
-            visible += 1
-            i += 1
-    return s[:i] + RESET if i < len(s) else s
-
-
-def _visual_rows(lines, term_width):
-    """Count actual terminal rows, accounting for line wrapping."""
-    rows = 0
-    for line in lines:
-        vlen = _visible_len(line)
-        rows += max(1, -(-vlen // term_width))  # ceil division, min 1
-    return rows
-
-
-# Settings from ~/.claude/claudeui.json
-_SETTINGS_CACHE = None
-_SETTINGS_MTIME = 0
-
-
-def load_settings():
-    """Load shared settings from ~/.claude/claudeui.json.
-
-    Re-reads the file if it has been modified since last load,
-    so users can tweak settings while the monitor is running.
-    """
-    global _SETTINGS_CACHE, _SETTINGS_MTIME
-    path = os.path.join(os.path.expanduser("~"), ".claude", "claudeui.json")
-    try:
-        mtime = os.path.getmtime(path)
-        if _SETTINGS_CACHE is not None and mtime == _SETTINGS_MTIME:
-            return _SETTINGS_CACHE
-        with open(path, "r") as f:
-            _SETTINGS_CACHE = json.load(f)
-        _SETTINGS_MTIME = mtime
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        _SETTINGS_CACHE = {}
-    return _SETTINGS_CACHE
-
-
-def get_setting(*keys, default=None):
-    """Get a nested setting value. e.g. get_setting('sparkline', 'mode')."""
-    cfg = load_settings()
-    for key in keys:
-        if isinstance(cfg, dict):
-            cfg = cfg.get(key)
-        else:
-            return default
-    return cfg if cfg is not None else default
-
-# ── Pricing and limits ──────────────────────────────────────────────
-
-MODEL_PRICING = {
-    # Claude 4.6 / 4.5
-    "claude-opus-4-6": {"input": 15.0, "cache_read": 1.5, "output": 75.0},
-    "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "output": 15.0},
-    "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "output": 4.0},
-    # Claude 3.5
-    "claude-sonnet-3-5": {"input": 3.0, "cache_read": 0.30, "output": 15.0},
-    "claude-haiku-3-5": {"input": 0.80, "cache_read": 0.08, "output": 4.0},
-}
-CONTEXT_LIMIT = 200_000
 _original_termios = None
-
-
-# ── ANSI codes ─────────────────────────────────────────────────────
-
-RESET = "\033[0m"
-BOLD = "\033[1m"
-DIM = "\033[2m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-ORANGE = "\033[38;5;208m"
-RED = "\033[31m"
-CYAN = "\033[96m"
-MAGENTA = "\033[95m"
-WHITE = "\033[97m"
-GRAY = "\033[90m"
-CLEAR = "\033[2J\033[H"
-HIDE_CURSOR = "\033[?25l"
-SHOW_CURSOR = "\033[?25h"
-ERASE_LINE = "\033[2K"
-ALT_SCREEN_ON = "\033[?1049h"
-ALT_SCREEN_OFF = "\033[?1049l"
-LOGO_GREEN = "\033[38;5;46m"
-
-# Matrix colors
-M_DARK = "\033[38;2;0;59;0m"
-M_MID = "\033[38;2;3;160;98m"
-M_BRIGHT = "\033[38;2;0;255;65m"
-
-# Activity pulse colors
-PULSE_NEW = "\033[38;2;0;255;65m"  # bright green flash
-PULSE_IDLE = "\033[38;2;80;80;80m"  # dim gray
-
-
-# ── Transcript parsing ──────────────────────────────────────────────
-
-def find_transcript(cwd=None):
-    """Find the most recent transcript for the given working directory."""
-    if cwd is None:
-        cwd = os.getcwd()
-    projects_dir = Path.home() / ".claude" / "projects"
-    project_name = "-" + cwd.replace("/", "-").lstrip("-")
-    project_dir = projects_dir / project_name
-    if not project_dir.exists():
-        project_name = cwd.replace("/", "-").lstrip("-")
-        project_dir = projects_dir / project_name
-    if not project_dir.exists():
-        return None
-    jsonl_files = sorted(project_dir.glob("*.jsonl"),
-                         key=lambda f: f.stat().st_mtime, reverse=True)
-    return str(jsonl_files[0]) if jsonl_files else None
-
-
-def find_latest_transcript():
-    """Find the most recently modified transcript across all projects."""
-    projects_dir = Path.home() / ".claude" / "projects"
-    if not projects_dir.exists():
-        return None
-    latest = None
-    latest_mtime = 0
-    for project_dir in projects_dir.iterdir():
-        if not project_dir.is_dir():
-            continue
-        for jsonl in project_dir.glob("*.jsonl"):
-            mtime = jsonl.stat().st_mtime
-            if mtime > latest_mtime:
-                latest_mtime = mtime
-                latest = str(jsonl)
-    return latest
-
-
-def parse_transcript(path):
-    """Parse a transcript JSONL file into a comprehensive report dict."""
-    r = {
-        "path": path, "model": "", "session_id": Path(path).stem[:8],
-        "start_time": None, "end_time": None,
-        "turns": 0, "responses": 0,
-        "compact_count": 0, "compact_events": [], "tokens_wasted": 0, "total_context_built": 0,
-        "tokens": {"input": 0, "cache_read": 0, "cache_creation": 0, "output": 0},
-        "context_history": [], "per_response": [], "context_per_turn": {},
-        "tool_counts": Counter(), "tool_errors": 0, "tool_error_details": [],
-        "files_read": Counter(), "files_edited": Counter(),
-        "thinking_count": 0, "subagent_count": 0, "skill_count": 0, "turns_since_compact": 0,
-        "recent_tools": [],  # last N tool calls for live trace
-        "last_error_msg": "",
-        # Current turn (current question/answer)
-        "turn_tool_counts": Counter(),
-        "turn_tool_errors": 0,
-        "turn_files_read": Counter(),
-        "turn_files_edited": Counter(),
-        "turn_thinking": 0,
-        "turn_agents_spawned": 0,
-        "turn_agents_pending": set(),
-        "turn_skill_active": None,  # name of currently running skill (Skill tool_use without result)
-        # Turn timer
-        "last_user_ts": None,   # timestamp of last user message
-        "last_assist_ts": None, # timestamp of last assistant response
-        "waiting_for_response": False,
-        # Event log
-        "event_log": [],  # list of (timestamp_str, description)
-    }
-    try:
-        with open(path, "r") as f:
-            lines = f.readlines()
-    except (FileNotFoundError, PermissionError):
-        return r
-
-    subagents = set()
-    agent_labels = {}  # tool_use_id -> description
-    current_turn = 0
-    last_context = 0
-    context_at_last_compact = 0
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-
-        ts = obj.get("timestamp")
-        etype = obj.get("type", "")
-        if ts:
-            if r["start_time"] is None:
-                r["start_time"] = ts
-            r["end_time"] = ts
-        if not r["model"] and etype == "assistant" and "message" in obj:
-            r["model"] = obj["message"].get("model", "")
-
-        # User turns
-        if etype == "user" and not obj.get("isMeta"):
-            content = obj.get("message", {}).get("content", "")
-            has_text = False
-            if isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        has_text = True
-                        break
-            elif isinstance(content, str) and content.strip():
-                has_text = True
-            if has_text:
-                current_turn += 1
-                r["turns"] += 1
-                r["turns_since_compact"] += 1
-                r["last_user_ts"] = ts
-                r["waiting_for_response"] = True
-                r["recent_tools"] = []
-                r["turn_tool_counts"] = Counter()
-                r["turn_tool_errors"] = 0
-                r["turn_files_read"] = Counter()
-                r["turn_files_edited"] = Counter()
-                r["turn_thinking"] = 0
-                r["turn_agents_spawned"] = 0
-                r["turn_agents_pending"] = set()
-                r["turn_skill_active"] = None
-
-        # Tool errors
-        if etype == "user" and "message" in obj:
-            content = obj.get("message", {}).get("content", [])
-            if isinstance(content, list):
-                for block in content:
-                    if (isinstance(block, dict)
-                            and block.get("type") == "tool_result"
-                            and block.get("is_error")):
-                        # Clear active skill if this error is from a Skill tool
-                        err_tid = block.get("tool_use_id", "")
-                        if err_tid in agent_labels and agent_labels[err_tid].startswith("skill:"):
-                            r["turn_skill_active"] = None
-                            del agent_labels[err_tid]
-                        r["tool_errors"] += 1
-                        r["turn_tool_errors"] += 1
-                        # Capture error message
-                        err_content = block.get("content", "")
-                        if isinstance(err_content, list):
-                            for eb in err_content:
-                                if isinstance(eb, dict) and eb.get("type") == "text":
-                                    err_content = eb.get("text", "")
-                                    break
-                        if isinstance(err_content, str) and err_content:
-                            r["last_error_msg"] = err_content[:300]
-                        r["tool_error_details"].append({
-                            "turn": current_turn,
-                            "error": r["last_error_msg"],
-                        })
-                        err_msg = r["last_error_msg"] if r["last_error_msg"] else "unknown"
-                        r["event_log"].append((ts, f"error: {err_msg}"))
-
-        # Agent results
-        if etype == "user" and "message" in obj:
-            content = obj.get("message", {}).get("content", [])
-            if isinstance(content, list):
-                for block in content:
-                    if (isinstance(block, dict)
-                            and block.get("type") == "tool_result"
-                            and not block.get("is_error")):
-                        tool_id = block.get("tool_use_id", "")
-                        if tool_id in agent_labels:
-                            if agent_labels[tool_id].startswith("skill:"):
-                                r["turn_skill_active"] = None
-                                del agent_labels[tool_id]
-                                continue
-                            r["turn_agents_pending"].discard(tool_id)
-                            label = agent_labels[tool_id]
-                            # Extract first line of agent result as summary
-                            result_text = ""
-                            rc = block.get("content", "")
-                            if isinstance(rc, list):
-                                for rb in rc:
-                                    if isinstance(rb, dict) and rb.get("type") == "text":
-                                        result_text = rb.get("text", "")
-                                        break
-                            elif isinstance(rc, str):
-                                result_text = rc
-                            # Get first meaningful line as summary
-                            summary = ""
-                            for line in result_text.split("\n"):
-                                line = line.strip()
-                                if line and not line.startswith("<") and not line.startswith("agentId:"):
-                                    summary = line[:120]
-                                    break
-                            if summary:
-                                r["event_log"].append((ts, f"agent done: {label} → {summary}"))
-                            else:
-                                r["event_log"].append((ts, f"agent done: {label}"))
-
-        # Assistant responses
-        if etype == "assistant" and "message" in obj:
-            msg = obj["message"]
-            content = msg.get("content", [])
-            usage = msg.get("usage", {})
-            r["responses"] += 1
-            r["last_assist_ts"] = ts
-            r["waiting_for_response"] = False
-            has_thinking = False
-            if isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict):
-                        if block.get("type") == "thinking":
-                            has_thinking = True
-                        if block.get("type") == "tool_use":
-                            name = block.get("name", "unknown")
-                            r["tool_counts"][name] += 1
-                            r["turn_tool_counts"][name] += 1
-                            inp = block.get("input", {})
-                            if name in ("Task", "Agent"):
-                                tid = block.get("id", "")
-                                if tid:
-                                    subagents.add(tid)
-                                agent_desc = inp.get("description", "")
-                                agent_type = inp.get("subagent_type", "")
-                                agent_label = agent_desc or agent_type or "subagent"
-                                r["event_log"].append((ts, f"agent: {agent_label}"))
-                                r["recent_tools"].append(f"agent {agent_label}")
-                                r["turn_agents_spawned"] += 1
-                                if tid:
-                                    agent_labels[tid] = agent_label
-                                    r["turn_agents_pending"].add(tid)
-                                continue
-                            if name == "Skill":
-                                skill_name = inp.get("skill", "")
-                                tid = block.get("id", "")
-                                if skill_name:
-                                    r["turn_skill_active"] = skill_name
-                                    r["skill_count"] += 1
-                                    r["event_log"].append((ts, f"skill: /{skill_name}"))
-                                    if tid:
-                                        agent_labels[tid] = f"skill:{skill_name}"
-                                continue
-                            fp = inp.get("file_path", inp.get("path", ""))
-                            # Build tool trace entry + event log
-                            if fp:
-                                fname = os.path.basename(fp)
-                                if name in ("Edit", "Write", "MultiEdit"):
-                                    r["files_edited"][fname] += 1
-                                    r["turn_files_edited"][fname] += 1
-                                else:
-                                    r["files_read"][fname] += 1
-                                    r["turn_files_read"][fname] += 1
-                                trace_entry = f"{name.lower()} {fname}"
-                                r["recent_tools"].append(trace_entry)
-                                r["event_log"].append((ts, trace_entry))
-                            else:
-                                cmd = inp.get("command", "")
-                                if cmd:
-                                    cmd_short = cmd.split()[0] if cmd else ""
-                                    trace_entry = f"{name.lower()} {cmd_short}"
-                                    # Full command for event log (clean up multiline)
-                                    cmd_clean = cmd.replace("\n", " ").strip()
-                                    r["event_log"].append((ts, f"$ {cmd_clean}"))
-                                else:
-                                    query = inp.get("pattern", inp.get("query", inp.get("prompt", inp.get("skill", ""))))
-                                    if query:
-                                        q_clean = str(query).replace("\n", " ").strip()
-                                        trace_entry = f"{name.lower()} {q_clean}"
-                                        r["event_log"].append((ts, f"{name.lower()}: {q_clean}"))
-                                    else:
-                                        trace_entry = name.lower()
-                                        r["event_log"].append((ts, trace_entry))
-                                r["recent_tools"].append(trace_entry)
-            if has_thinking:
-                r["thinking_count"] += 1
-                r["turn_thinking"] += 1
-            if usage:
-                inp_t = usage.get("input_tokens", 0)
-                cache_r = usage.get("cache_read_input_tokens", 0)
-                cache_c = usage.get("cache_creation_input_tokens", 0)
-                out_t = usage.get("output_tokens", 0)
-                r["tokens"]["input"] += inp_t
-                r["tokens"]["cache_read"] += cache_r
-                r["tokens"]["cache_creation"] += cache_c
-                r["tokens"]["output"] += out_t
-                ctx = inp_t + cache_r + cache_c + out_t
-                last_context = ctx
-                if context_at_last_compact == -1:
-                    context_at_last_compact = ctx
-                    # Compute waste: headroom (unusable space) + rebuild (re-reading summary)
-                    if r["compact_events"]:
-                        evt = r["compact_events"][-1]
-                        evt["context_after"] = ctx
-                        pre = evt["context_before"]
-                        if pre > 0:
-                            headroom = max(0, CONTEXT_LIMIT - pre)
-                            rebuild = ctx  # cost of re-reading compacted summary
-                            r["tokens_wasted"] += headroom + rebuild
-                # Track per-turn context (last snapshot per turn wins)
-                r["context_per_turn"][current_turn] = ctx
-                if out_t > 0:
-                    r["context_history"].append(out_t)
-                r["per_response"].append({
-                    "turn": current_turn, "ctx": ctx, "output": out_t,
-                    "timestamp": ts,
-                })
-
-        # Compaction
-        if (etype == "summary" or
-                (etype == "system" and obj.get("subtype") == "compact_boundary")):
-            r["compact_count"] += 1
-            r["total_context_built"] += CONTEXT_LIMIT  # full window budget per segment
-            r["context_history"].append(None)
-            r["event_log"].append((ts, f"⚡ compaction #{r['compact_count']}"))
-            r["compact_events"].append({
-                "turn": current_turn,
-                "context_before": last_context,
-                "turns_since_last": r["turns_since_compact"],
-            })
-            r["turns_since_compact"] = 0
-            r["context_per_turn"] = {}  # reset per-turn tracking
-            context_at_last_compact = -1  # sentinel: next usage sets baseline
-
-    r["context_at_last_compact"] = context_at_last_compact
-    r["subagent_count"] = len(subagents)
-    r["last_context"] = last_context
-    r["recent_tools"] = r["recent_tools"][-5:]
-    r["full_log"] = list(r["event_log"])  # full log for viewer
-    max_log = get_setting("monitor", "log_lines", default=8)
-    if max_log is False or max_log == 0:
-        r["event_log"] = []
-    elif isinstance(max_log, int) and max_log > 0:
-        r["event_log"] = r["event_log"][-max_log:]
-    else:
-        r["event_log"] = r["event_log"][-8:]  # invalid config, fallback
-    return r
-
-
-def get_pricing(model):
-    for key, p in MODEL_PRICING.items():
-        if key in model:
-            return p
-    return MODEL_PRICING["claude-sonnet-4-6"]
-
-
-def calc_cost(tokens, pricing):
-    c_input = tokens["input"] * pricing["input"] / 1_000_000
-    c_cache = tokens["cache_read"] * pricing["cache_read"] / 1_000_000
-    c_output = tokens["output"] * pricing["output"] / 1_000_000
-    return {"input": c_input, "cache_read": c_cache, "output": c_output,
-            "total": c_input + c_cache + c_output}
-
-
-def format_duration_live(start_ts):
-    """Format duration from start to NOW (live updating)."""
-    try:
-        start = datetime.fromisoformat(start_ts.replace("Z", "+00:00"))
-        secs = int((datetime.now(timezone.utc) - start).total_seconds())
-        h, m, s = secs // 3600, (secs % 3600) // 60, secs % 60
-        if h > 0:
-            return f"{h}h {m:02d}m {s:02d}s"
-        return f"{m}m {s:02d}s"
-    except Exception:
-        return "—"
-
-
-def format_event_time(ts_str):
-    """Format timestamp to HH:MM:SS for event log."""
-    try:
-        dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-        local = dt.astimezone()
-        return local.strftime("%H:%M:%S")
-    except Exception:
-        return "??:??:??"
-
-
-def format_tokens(n):
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.1f}k"
-    return str(n)
-
-
-def get_terminal_width():
-    """Get terminal width, default 80."""
-    try:
-        return shutil.get_terminal_size().columns
-    except Exception:
-        return 80
 
 
 # ── Dashboard rendering ─────────────────────────────────────────────
@@ -783,14 +301,7 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
         wasted = r["tokens_wasted"]
         eff = max(0, 1 - wasted / total_built) if wasted > 0 else 1.0
         eff_pct = int(eff * 100)
-        if eff_pct >= 90:
-            eff_color = GREEN
-        elif eff_pct >= 70:
-            eff_color = YELLOW
-        elif eff_pct >= 50:
-            eff_color = ORANGE
-        else:
-            eff_color = RED
+        eff_color = efficiency_color(eff_pct)
         wasted_str = format_tokens(int(wasted)) if wasted > 0 else "0"
         total_str = format_tokens(int(total_built))
         lines.append(f"  {DIM}Efficiency:{RESET} {eff_color}{eff_pct}%{RESET}  {DIM}│{RESET}  {DIM}Wasted:{RESET} {RED}{wasted_str}{RESET}{DIM}/{RESET}{GRAY}{total_str}{RESET}")
@@ -799,20 +310,22 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     # Cost section
     lines.append(f"  {BOLD}COST{RESET}")
     lines.append(f"  {YELLOW}${cost['total']:.2f}{RESET} total  {DIM}│{RESET}  ~{GRAY}${cpt:.2f}/turn{RESET}{cost_per_min}  {DIM}│{RESET}  {GREEN}${saved:.2f} saved{RESET}")
-    lines.append(f"  {DIM}Input:{RESET} ${cost['input']:.2f}  {DIM}│{RESET}  {DIM}Cache:{RESET} ${cost['cache_read']:.2f}  {DIM}│{RESET}  {DIM}Output:{RESET} ${cost['output']:.2f}")
+    lines.append(f"  {DIM}Input:{RESET} ${cost['input']:.2f}  {DIM}│{RESET}  {DIM}Cache read:{RESET} ${cost['cache_read']:.2f}  {DIM}│{RESET}  {DIM}Cache write:{RESET} ${cost['cache_write']:.2f}  {DIM}│{RESET}  {DIM}Output:{RESET} ${cost['output']:.2f}")
 
     # Token breakdown bar
-    tok_total = r["tokens"]["input"] + r["tokens"]["cache_read"] + r["tokens"]["output"]
+    tok_total = r["tokens"]["input"] + r["tokens"]["cache_read"] + r["tokens"]["cache_creation"] + r["tokens"]["output"]
     if tok_total > 0:
         tb_width = max(20, min(w - 10, 60))
         inp_frac = r["tokens"]["input"] / tok_total
-        cache_frac = r["tokens"]["cache_read"] / tok_total
+        cache_r_frac = r["tokens"]["cache_read"] / tok_total
+        cache_w_frac = r["tokens"]["cache_creation"] / tok_total
         out_frac = r["tokens"]["output"] / tok_total
         inp_w = max(1, int(tb_width * inp_frac)) if inp_frac > 0.005 else 0
         out_w = max(1, int(tb_width * out_frac)) if out_frac > 0.005 else 0
-        cache_w = tb_width - inp_w - out_w
-        tok_bar = f"{CYAN}{'█' * inp_w}{RESET}{GREEN}{'█' * cache_w}{RESET}{YELLOW}{'█' * out_w}{RESET}"
-        tok_legend = f"{CYAN}■{RESET}{DIM}input {inp_frac:.0%}{RESET}  {GREEN}■{RESET}{DIM}cache {cache_frac:.0%}{RESET}  {YELLOW}■{RESET}{DIM}output {out_frac:.0%}{RESET}"
+        cw_w = max(1, int(tb_width * cache_w_frac)) if cache_w_frac > 0.005 else 0
+        cr_w = tb_width - inp_w - cw_w - out_w
+        tok_bar = f"{CYAN}{'█' * inp_w}{RESET}{GREEN}{'█' * cr_w}{RESET}{MAGENTA}{'█' * cw_w}{RESET}{YELLOW}{'█' * out_w}{RESET}"
+        tok_legend = f"{CYAN}■{RESET}{DIM}input {inp_frac:.0%}{RESET}  {GREEN}■{RESET}{DIM}cache read {cache_r_frac:.0%}{RESET}  {MAGENTA}■{RESET}{DIM}cache write {cache_w_frac:.0%}{RESET}  {YELLOW}■{RESET}{DIM}output {out_frac:.0%}{RESET}"
         lines.append(f"  {tok_bar}")
         lines.append(f"  {tok_legend}")
 
@@ -1215,9 +728,7 @@ def _save_claudeui_setting(*keys_and_value):
         f.write("\n")
     os.replace(tmp, path)
     # Force settings reload
-    global _SETTINGS_CACHE, _SETTINGS_MTIME
-    _SETTINGS_CACHE = None
-    _SETTINGS_MTIME = 0
+    reset_settings_cache()
 
 
 def _save_env_override(var_name, value):
@@ -1525,20 +1036,6 @@ def list_sessions():
     print(f"\n  {DIM}Usage: python3 monitor.py <session-id>{RESET}\n")
 
 
-def find_session_by_id(session_id):
-    """Find transcript path by session ID prefix."""
-    projects_dir = Path.home() / ".claude" / "projects"
-    if not projects_dir.exists():
-        return None
-    for project_dir in projects_dir.iterdir():
-        if not project_dir.is_dir():
-            continue
-        for jsonl in project_dir.glob("*.jsonl"):
-            if jsonl.stem.startswith(session_id):
-                return str(jsonl)
-    return None
-
-
 # ── Input handling ──────────────────────────────────────────────────
 
 VALID_KEYS = frozenset("qQsSdDlLwWeEoOcC?")
@@ -1613,273 +1110,6 @@ def export_session(path, session_id):
     sys.stdout.flush()
 
 
-# ── Efficiency chart screen ──────────────────────────────────────────
-
-
-EFFICIENCY_LEGEND = f"    {GREEN}██{RESET} useful   {YELLOW}▓▓{RESET} rebuild   {GRAY}░░{RESET} headroom"
-
-
-def _build_segments(r):
-    """Build per-segment data from compact_events and current context.
-
-    Each segment shows:
-      - rebuild: tokens inherited from previous compaction summary
-      - useful: new tokens added during this segment
-      - headroom: reserved space for compaction (CONTEXT_LIMIT - peak)
-      - peak: total context at end of segment
-    Compaction waste is stored separately per event, shown between segments.
-    """
-    segments = []
-    compactions = []
-    prev_rebuild = 0
-    for evt in r["compact_events"]:
-        peak = evt["context_before"]
-        survived = evt.get("context_after", 0)
-        lost = peak - survived if survived > 0 else 0
-        useful = peak - prev_rebuild  # new work added in this segment
-        headroom = max(0, CONTEXT_LIMIT - peak)
-        segments.append({
-            "peak": peak,
-            "useful": max(useful, 0),
-            "rebuild": prev_rebuild,
-            "headroom": headroom,
-        })
-        compactions.append({
-            "lost": max(lost, 0),
-            "survived": survived,
-        })
-        prev_rebuild = survived
-    # Current (active) segment
-    current = r["last_context"]
-    if current > 0:
-        useful = current - prev_rebuild
-        segments.append({
-            "peak": current,
-            "useful": max(useful, 0),
-            "rebuild": prev_rebuild,
-            "headroom": 0,  # active segment — still growing
-            "active": True,
-        })
-    return segments, compactions
-
-
-def _render_horizontal_chart(segments, compactions, w):
-    """Render horizontal bar chart of segments."""
-    lines = []
-    # Scale all bars to CONTEXT_LIMIT so completed segments show full width
-    scale_ref = CONTEXT_LIMIT
-    bar_width = max(20, w - 24)
-
-    lines.append(f"  {BOLD}CONTEXT EFFICIENCY — HORIZONTAL{RESET}")
-    lines.append("")
-    lines.append(EFFICIENCY_LEGEND)
-    lines.append("")
-
-    for i, seg in enumerate(segments):
-        is_active = seg.get("active", False)
-        label = f"{'→ ' if is_active else '  '}Seg {i + 1}"
-        has_compaction = i < len(compactions)
-
-        rebuild_t = seg["rebuild"]
-        useful_t = seg["useful"]
-        headroom_t = seg["headroom"]
-        total_t = rebuild_t + useful_t + headroom_t  # = CONTEXT_LIMIT for completed
-
-        scale = bar_width / scale_ref if scale_ref > 0 else 1
-        total_bar = min(int(total_t * scale), bar_width)
-        if total_bar == 0 and total_t > 0:
-            total_bar = 1
-
-        # Distribute bar proportionally
-        if total_t > 0:
-            rebuild_w = int(total_bar * rebuild_t / total_t)
-            headroom_w = int(total_bar * headroom_t / total_t)
-            useful_w = total_bar - rebuild_w - headroom_w
-        else:
-            rebuild_w = useful_w = headroom_w = 0
-        # Ensure minimum 1 char for non-zero components
-        if rebuild_t > 0 and rebuild_w == 0:
-            rebuild_w = 1
-            useful_w = max(0, useful_w - 1)
-        if headroom_t > 0 and headroom_w == 0:
-            headroom_w = 1
-            useful_w = max(0, useful_w - 1)
-
-        bar = ""
-        if rebuild_w > 0:
-            bar += f"{YELLOW}{'▓' * rebuild_w}{RESET}"
-        if useful_w > 0:
-            bar += f"{GREEN}{'█' * useful_w}{RESET}"
-        if headroom_w > 0:
-            bar += f"{GRAY}{'░' * headroom_w}{RESET}"
-
-        peak_str = format_tokens(int(seg["peak"]))
-        if not is_active:
-            lines.append(f"  {BOLD}{label}{RESET}  {bar}  {GRAY}{format_tokens(CONTEXT_LIMIT)}{RESET}")
-        else:
-            lines.append(f"  {BOLD}{label}{RESET}  {bar}  {GRAY}{peak_str}{RESET}")
-
-        # Detail line
-        parts = []
-        if rebuild_t > 0:
-            parts.append(f"{YELLOW}{format_tokens(int(rebuild_t))}{RESET} rebuild")
-        parts.append(f"{GREEN}{format_tokens(int(useful_t))}{RESET} useful")
-        if headroom_t > 0:
-            parts.append(f"{GRAY}{format_tokens(int(headroom_t))}{RESET} headroom")
-        if has_compaction:
-            cl = compactions[i]["lost"]
-            cs = compactions[i]["survived"]
-            parts.append(f"{DIM}→ compacted: {format_tokens(int(cs))} survived, -{format_tokens(int(cl))} lost{RESET}")
-        detail = f"{DIM} │ {RESET}".join(parts)
-        lines.append(f"          {detail}")
-
-        # Compaction marker between segments
-        if has_compaction:
-            lines.append(f"          {DIM}──── compact #{i + 1} ────{RESET}")
-
-    return lines
-
-
-def _render_vertical_chart(segments, compactions, w, h):
-    """Render vertical stacked bar chart of segments."""
-    lines = []
-    scale_ref = CONTEXT_LIMIT
-    chart_height = max(8, min(h - 12, 20))
-    col_width = max(6, min(12, (w - 10) // max(len(segments), 1)))
-    num_cols = min(len(segments), (w - 10) // col_width)
-
-    lines.append(f"  {BOLD}CONTEXT EFFICIENCY — VERTICAL{RESET}")
-    lines.append("")
-    lines.append(EFFICIENCY_LEGEND)
-    lines.append("")
-
-    # Build columns: rebuild (bottom) + useful (middle) + headroom (top)
-    cols = []
-    display_segs = segments[-num_cols:]
-    for seg in display_segs:
-        total_t = seg["rebuild"] + seg["useful"] + seg["headroom"]
-        total_rows = int(total_t / scale_ref * chart_height) if scale_ref > 0 else 0
-        rebuild_rows = int(seg["rebuild"] / scale_ref * chart_height) if scale_ref > 0 else 0
-        headroom_rows = int(seg["headroom"] / scale_ref * chart_height) if scale_ref > 0 else 0
-        useful_rows = total_rows - rebuild_rows - headroom_rows
-        if useful_rows < 0:
-            useful_rows = 0
-        cols.append((rebuild_rows, useful_rows, headroom_rows, total_rows))
-
-    # Y-axis labels
-    for row in range(chart_height, 0, -1):
-        if row == chart_height:
-            y_label = format_tokens(CONTEXT_LIMIT)
-        elif row == chart_height // 2:
-            y_label = format_tokens(CONTEXT_LIMIT // 2)
-        elif row == 1:
-            y_label = "0"
-        else:
-            y_label = ""
-        line = f"  {GRAY}{y_label:>6s}{RESET} │"
-
-        for ci, (rb, us, hr, _) in enumerate(cols):
-            # From bottom: rebuild (yellow), useful (green), headroom (gray)
-            bar_char = "    "
-            if row <= rb:
-                bar_char = f"{YELLOW}▓▓▓▓{RESET}"
-            elif row <= rb + us:
-                bar_char = f"{GREEN}████{RESET}"
-            elif row <= rb + us + hr:
-                bar_char = f"{GRAY}░░░░{RESET}"
-            padding = " " * max(0, col_width - 4)
-            line += bar_char + padding
-        lines.append(line)
-
-    # X-axis
-    x_axis = f"  {'':>6s} └"
-    for i in range(len(cols)):
-        x_axis += f"{'─' * col_width}"
-    lines.append(x_axis)
-
-    # Labels
-    label_line = f"  {'':>6s}  "
-    for i in range(len(cols)):
-        seg_idx = len(segments) - num_cols + i
-        is_active = segments[seg_idx].get("active", False)
-        label = f"{'→' if is_active else 'S'}{seg_idx + 1}"
-        label_line += f"{BOLD}{label}{RESET}" + " " * max(0, col_width - len(label))
-    lines.append(label_line)
-
-    # Peak values
-    peak_line = f"  {'':>6s}  "
-    for i in range(len(cols)):
-        seg_idx = len(segments) - num_cols + i
-        pk = format_tokens(int(segments[seg_idx]["peak"]))
-        peak_line += f"{GRAY}{pk}{RESET}" + " " * max(0, col_width - len(pk))
-    lines.append(peak_line)
-
-    return lines
-
-
-def show_efficiency_chart(r, term_width):
-    """Interactive efficiency chart with horizontal/vertical toggle."""
-    out = sys.stdout
-    segments, compactions = _build_segments(r)
-    if not segments:
-        return
-
-    # Calculate totals
-    total_wasted = r["tokens_wasted"]
-    total_built = r["total_context_built"] + r["last_context"]
-    eff = max(0, 1 - total_wasted / total_built) if total_built > 0 else 1.0
-    eff_pct = int(eff * 100)
-
-    mode = "horizontal"  # start with horizontal
-    term_height = shutil.get_terminal_size().lines
-
-    while True:
-        lines = []
-        lines.append("")
-        w = term_width - 2
-
-        if mode == "horizontal":
-            lines.extend(_render_horizontal_chart(segments, compactions, w))
-        else:
-            lines.extend(_render_vertical_chart(segments, compactions, w, term_height))
-
-        # Summary
-        lines.append("")
-        if eff_pct >= 90:
-            eff_color = GREEN
-        elif eff_pct >= 70:
-            eff_color = YELLOW
-        elif eff_pct >= 50:
-            eff_color = ORANGE
-        else:
-            eff_color = RED
-        wasted_str = format_tokens(int(total_wasted)) if total_wasted > 0 else "0"
-        total_str = format_tokens(int(total_built))
-        lines.append(f"  {BOLD}Efficiency:{RESET} {eff_color}{eff_pct}%{RESET}  {DIM}│{RESET}  {DIM}Wasted:{RESET} {RED}{wasted_str}{RESET}{DIM}/{RESET}{GRAY}{total_str}{RESET}  {DIM}│{RESET}  {DIM}Segments:{RESET} {CYAN}{len(segments)}{RESET}  {DIM}│{RESET}  {DIM}Compactions:{RESET} {CYAN}{r['compact_count']}{RESET}")
-        lines.append("")
-        lines.append(f"  {DIM}v{RESET} toggle view  {DIM}q{RESET} close")
-        lines.append("")
-
-        out.write(CLEAR + "\n".join(lines))
-        out.flush()
-
-        # Wait for keypress
-        while True:
-            if select.select([sys.stdin], [], [], 0.1)[0]:
-                byte = os.read(sys.stdin.fileno(), 1)
-                # Drain escape sequence
-                while select.select([sys.stdin], [], [], 0.01)[0]:
-                    os.read(sys.stdin.fileno(), 1)
-                key = byte.decode("utf-8", errors="ignore")
-                if key in ("v", "V"):
-                    mode = "vertical" if mode == "horizontal" else "horizontal"
-                    term_width = get_terminal_width()
-                    term_height = shutil.get_terminal_size().lines
-                    break
-                elif key in ("q", "Q", "\x1b"):
-                    return
-
-
 # ── Splash screen ────────────────────────────────────────────────────
 
 LOGO_LINES = [
@@ -1931,47 +1161,6 @@ def update_splash_status(out, status_text):
     pad = max(0, (term_w - len(status_text)) // 2)
     out.write(" " * pad + f"{CYAN}{status_text}{RESET}")
     out.flush()
-
-
-# ── Standalone chart entry point ─────────────────────────────────────
-
-
-def _run_chart_standalone(session_id=None):
-    """Run efficiency chart as a standalone screen — no monitor chrome."""
-    # Find transcript
-    if session_id:
-        path = find_session_by_id(session_id)
-        if not path:
-            print(f"Session '{session_id}' not found. Use --list to see sessions.")
-            sys.exit(1)
-    else:
-        path = find_transcript()
-        if not path:
-            print("No active session found. Use --list or pass a session ID.")
-            sys.exit(1)
-
-    # Parse
-    r = parse_transcript(path)
-    if not r:
-        print("Failed to parse transcript.")
-        sys.exit(1)
-
-    if not r["compact_events"]:
-        print("No compactions yet — efficiency is 100%.")
-        return
-
-    # Enter raw mode and alt screen
-    old_settings = termios.tcgetattr(sys.stdin)
-    try:
-        tty.setcbreak(sys.stdin.fileno())
-        sys.stdout.write(ALT_SCREEN_ON + HIDE_CURSOR)
-        sys.stdout.flush()
-        term_width = get_terminal_width()
-        show_efficiency_chart(r, term_width)
-    finally:
-        sys.stdout.write(SHOW_CURSOR + ALT_SCREEN_OFF)
-        sys.stdout.flush()
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
 
 
 # ── Main loop ───────────────────────────────────────────────────────
@@ -2137,7 +1326,7 @@ def main():
                             cached_header = cached_log = None
                     elif key in ("w", "W"):
                         if r is not None:
-                            show_efficiency_chart(r, term_width)
+                            show_efficiency_chart(r, term_width, transcript_path=path)
                             needs_full_redraw = True
                             cached_header = cached_log = None
                     elif key in ("c", "C"):

@@ -32,13 +32,13 @@ CONTEXT_LIMIT = 200_000
 # Pricing per million tokens (as of 2025)
 # https://docs.anthropic.com/en/docs/about-claude/models
 MODEL_PRICING = {
-    # Claude 4.6 / 4.5
-    "claude-opus-4-6": {"input": 15.0, "cache_read": 1.5, "output": 75.0},
-    "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "output": 15.0},
-    "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "output": 4.0},
+    # Claude 4.6 / 4.5  (cache_write = 1.25x input per Anthropic pricing)
+    "claude-opus-4-6": {"input": 15.0, "cache_read": 1.5, "cache_write": 18.75, "output": 75.0},
+    "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
+    "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
     # Claude 3.5
-    "claude-sonnet-3-5": {"input": 3.0, "cache_read": 0.30, "output": 15.0},
-    "claude-haiku-3-5": {"input": 0.80, "cache_read": 0.08, "output": 4.0},
+    "claude-sonnet-3-5": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
+    "claude-haiku-3-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
 }
 
 # ANSI color codes
@@ -232,6 +232,7 @@ def parse_transcript(transcript_path):
         "context_tokens": 0,
         "input_tokens_total": 0,
         "cache_read_tokens_total": 0,
+        "cache_creation_tokens_total": 0,
         "output_tokens_total": 0,
         "compact_count": 0,
         "files_touched": set(),
@@ -341,6 +342,9 @@ def parse_transcript(transcript_path):
             result["cache_read_tokens_total"] += usage.get(
                 "cache_read_input_tokens", 0
             )
+            result["cache_creation_tokens_total"] += usage.get(
+                "cache_creation_input_tokens", 0
+            )
             result["output_tokens_total"] += usage.get("output_tokens", 0)
 
             # Per-response context snapshot
@@ -352,12 +356,14 @@ def parse_transcript(transcript_path):
             # Capture post-compaction baseline from first usage after compact
             if result["context_at_last_compact"] == -1:
                 result["context_at_last_compact"] = ctx_snapshot
-                # Record waste: headroom (unusable space) + rebuild (re-reading summary)
+                # Record waste: headroom + summary (rebuild minus system prompt)
+                # System prompt (cache_read) is constant overhead, not compaction waste
                 if result["compact_count"] > 0 and result.get("_ctx_before_compact", 0) > 0:
                     pre = result["_ctx_before_compact"]
+                    cache_r = usage.get("cache_read_input_tokens", 0)
                     headroom = max(0, CONTEXT_LIMIT - pre)
-                    rebuild = ctx_snapshot  # cost of re-reading compacted summary
-                    result["tokens_wasted"] += headroom + rebuild
+                    summary = max(0, ctx_snapshot - cache_r)
+                    result["tokens_wasted"] += headroom + summary
 
             # Track per-turn context growth (last snapshot per turn wins)
             turn = result["turn_count"]
@@ -611,6 +617,7 @@ def main():
     cost = (
         metrics["input_tokens_total"] * pricing["input"] / 1_000_000
         + metrics["cache_read_tokens_total"] * pricing["cache_read"] / 1_000_000
+        + metrics["cache_creation_tokens_total"] * pricing.get("cache_write", pricing["input"] * 1.25) / 1_000_000
         + metrics["output_tokens_total"] * pricing["output"] / 1_000_000
     )
     cost_str = format_cost(cost)

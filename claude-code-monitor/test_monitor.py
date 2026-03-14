@@ -11,24 +11,11 @@ import sys
 import tempfile
 import unittest
 
-# Import monitor module
+# Import from lib and chart modules directly
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# We need to import the module carefully since it has side effects at module level
-# Parse the file to extract functions without running main()
-_monitor_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "monitor.py")
-_module_code = open(_monitor_path).read()
-# Execute everything up to main() to get all function definitions
-_ns = {"__name__": "monitor", "__file__": _monitor_path}
-exec(compile(_module_code.split("\ndef main(")[0], _monitor_path, "exec"), _ns)
-
-# Pull out the functions and constants we need to test
-CONTEXT_LIMIT = _ns["CONTEXT_LIMIT"]
-format_tokens = _ns["format_tokens"]
-_build_segments = _ns["_build_segments"]
-_render_horizontal_chart = _ns["_render_horizontal_chart"]
-_render_vertical_chart = _ns["_render_vertical_chart"]
-parse_transcript = _ns["parse_transcript"]
+from lib import CONTEXT_LIMIT, format_tokens, parse_transcript
+from chart import _build_segments, _render_horizontal_chart, _render_vertical_chart
 
 # Strip ANSI escape codes for assertion comparisons
 def strip_ansi(s):
@@ -55,11 +42,14 @@ class TestFormatTokens(unittest.TestCase):
 # ── _build_segments ───────────────────────────────────────────────────
 
 class TestBuildSegments(unittest.TestCase):
+    SYS_PROMPT = 14_328  # typical system prompt size
+
     def test_no_compactions_active_segment(self):
         """Fresh session with no compactions — single active segment."""
         r = {
             "compact_events": [],
             "last_context": 80_000,
+            "system_prompt_tokens": 0,
         }
         segs, comps = _build_segments(r)
         self.assertEqual(len(segs), 1)
@@ -68,7 +58,8 @@ class TestBuildSegments(unittest.TestCase):
         self.assertTrue(seg["active"])
         self.assertEqual(seg["peak"], 80_000)
         self.assertEqual(seg["useful"], 80_000)
-        self.assertEqual(seg["rebuild"], 0)
+        self.assertEqual(seg["system"], 0)
+        self.assertEqual(seg["summary"], 0)
         self.assertEqual(seg["headroom"], 0)
 
     def test_no_compactions_zero_context(self):
@@ -76,6 +67,7 @@ class TestBuildSegments(unittest.TestCase):
         r = {
             "compact_events": [],
             "last_context": 0,
+            "system_prompt_tokens": 0,
         }
         segs, comps = _build_segments(r)
         self.assertEqual(len(segs), 0)
@@ -85,9 +77,11 @@ class TestBuildSegments(unittest.TestCase):
         """Single compaction: Seg 1 (completed) + Seg 2 (active)."""
         r = {
             "compact_events": [
-                {"context_before": 167_000, "context_after": 33_100},
+                {"context_before": 167_000, "context_after": 33_100,
+                 "system_prompt": self.SYS_PROMPT},
             ],
             "last_context": 80_000,
+            "system_prompt_tokens": self.SYS_PROMPT,
         }
         segs, comps = _build_segments(r)
 
@@ -95,62 +89,72 @@ class TestBuildSegments(unittest.TestCase):
         self.assertEqual(len(segs), 2)
         self.assertEqual(len(comps), 1)
 
-        # Seg 1: all useful (first segment, no rebuild)
+        # Seg 1: system prompt + useful (first segment, no summary)
         s1 = segs[0]
         self.assertEqual(s1["peak"], 167_000)
-        self.assertEqual(s1["useful"], 167_000)
-        self.assertEqual(s1["rebuild"], 0)
-        self.assertEqual(s1["headroom"], CONTEXT_LIMIT - 167_000)  # 33k
+        self.assertEqual(s1["system"], self.SYS_PROMPT)
+        self.assertEqual(s1["summary"], 0)
+        self.assertEqual(s1["useful"], 167_000)  # useful = peak - prev_rebuild(0)
+        self.assertEqual(s1["headroom"], CONTEXT_LIMIT - 167_000)
         self.assertNotIn("active", s1)
 
         # Compaction: lost + survived
         c1 = comps[0]
         self.assertEqual(c1["survived"], 33_100)
-        self.assertEqual(c1["lost"], 167_000 - 33_100)  # 133.9k
+        self.assertEqual(c1["lost"], 167_000 - 33_100)
 
-        # Seg 2: active, rebuild = survived from compaction
+        # Seg 2: active, system + summary + useful
         s2 = segs[1]
         self.assertTrue(s2["active"])
         self.assertEqual(s2["peak"], 80_000)
-        self.assertEqual(s2["rebuild"], 33_100)
+        self.assertEqual(s2["system"], self.SYS_PROMPT)
+        self.assertEqual(s2["summary"], 33_100 - self.SYS_PROMPT)  # 18.8k
         self.assertEqual(s2["useful"], 80_000 - 33_100)  # 46.9k
-        self.assertEqual(s2["headroom"], 0)  # active segment
+        self.assertEqual(s2["headroom"], 0)
 
     def test_two_compactions(self):
         """Two compactions: 3 segments."""
         r = {
             "compact_events": [
-                {"context_before": 167_000, "context_after": 33_100},
-                {"context_before": 147_500, "context_after": 24_900},
+                {"context_before": 167_000, "context_after": 33_100,
+                 "system_prompt": self.SYS_PROMPT},
+                {"context_before": 147_500, "context_after": 24_900,
+                 "system_prompt": self.SYS_PROMPT},
             ],
             "last_context": 50_000,
+            "system_prompt_tokens": self.SYS_PROMPT,
         }
         segs, comps = _build_segments(r)
         self.assertEqual(len(segs), 3)
         self.assertEqual(len(comps), 2)
 
-        # Seg 1: no rebuild, all useful
-        self.assertEqual(segs[0]["rebuild"], 0)
+        # Seg 1: system + useful, no summary
+        self.assertEqual(segs[0]["system"], self.SYS_PROMPT)
+        self.assertEqual(segs[0]["summary"], 0)
         self.assertEqual(segs[0]["useful"], 167_000)
         self.assertEqual(segs[0]["headroom"], CONTEXT_LIMIT - 167_000)
 
-        # Seg 2: rebuild from compaction 1
-        self.assertEqual(segs[1]["rebuild"], 33_100)
-        self.assertEqual(segs[1]["useful"], 147_500 - 33_100)  # 114.4k
+        # Seg 2: system + summary from compaction 1 + useful
+        self.assertEqual(segs[1]["system"], self.SYS_PROMPT)
+        self.assertEqual(segs[1]["summary"], 33_100 - self.SYS_PROMPT)
+        self.assertEqual(segs[1]["useful"], 147_500 - 33_100)
         self.assertEqual(segs[1]["headroom"], CONTEXT_LIMIT - 147_500)
 
-        # Seg 3: rebuild from compaction 2
-        self.assertEqual(segs[2]["rebuild"], 24_900)
-        self.assertEqual(segs[2]["useful"], 50_000 - 24_900)  # 25.1k
+        # Seg 3: system + summary from compaction 2 + useful
+        self.assertEqual(segs[2]["system"], self.SYS_PROMPT)
+        self.assertEqual(segs[2]["summary"], 24_900 - self.SYS_PROMPT)
+        self.assertEqual(segs[2]["useful"], 50_000 - 24_900)
         self.assertTrue(segs[2]["active"])
 
     def test_segment_useful_never_negative(self):
         """If current context <= rebuild, useful should be 0 not negative."""
         r = {
             "compact_events": [
-                {"context_before": 167_000, "context_after": 33_100},
+                {"context_before": 167_000, "context_after": 33_100,
+                 "system_prompt": self.SYS_PROMPT},
             ],
             "last_context": 33_100,  # exactly rebuild, no new work
+            "system_prompt_tokens": self.SYS_PROMPT,
         }
         segs, _ = _build_segments(r)
         self.assertEqual(segs[1]["useful"], 0)
@@ -162,29 +166,36 @@ class TestBuildSegments(unittest.TestCase):
                 {"context_before": 167_000},  # no context_after
             ],
             "last_context": 50_000,
+            "system_prompt_tokens": self.SYS_PROMPT,
         }
         segs, comps = _build_segments(r)
         self.assertEqual(comps[0]["survived"], 0)
         self.assertEqual(comps[0]["lost"], 0)  # survived=0 → lost guard
-        self.assertEqual(segs[1]["rebuild"], 0)
+        self.assertEqual(segs[1]["summary"], 0)
 
 
 # ── Waste model ───────────────────────────────────────────────────────
 
 class TestWasteModel(unittest.TestCase):
-    """Test the headroom + rebuild waste calculation."""
+    """Test the headroom + summary waste calculation."""
+    SYS_PROMPT = 14_328
 
     def _compute_waste(self, compact_events, last_context):
-        """Simulate waste calculation matching parse_transcript logic."""
+        """Simulate waste calculation matching parse_transcript logic.
+
+        Waste = headroom + summary (rebuild minus system prompt).
+        System prompt is constant overhead, not compaction waste.
+        """
         tokens_wasted = 0
         total_context_built = 0
         for evt in compact_events:
             pre = evt["context_before"]
             ctx_after = evt.get("context_after", 0)
+            sys_prompt = evt.get("system_prompt", 0)
             if pre > 0:
                 headroom = max(0, CONTEXT_LIMIT - pre)
-                rebuild = ctx_after
-                tokens_wasted += headroom + rebuild
+                summary = max(0, ctx_after - sys_prompt)
+                tokens_wasted += headroom + summary
             total_context_built += CONTEXT_LIMIT
         total_built = total_context_built + last_context
         eff = max(0, 1 - tokens_wasted / total_built) if total_built > 0 else 1.0
@@ -198,35 +209,37 @@ class TestWasteModel(unittest.TestCase):
         self.assertAlmostEqual(eff, 1.0)
 
     def test_one_compaction(self):
-        """Single compaction: waste = headroom + rebuild."""
-        events = [{"context_before": 167_000, "context_after": 33_100}]
+        """Single compaction: waste = headroom + summary."""
+        events = [{"context_before": 167_000, "context_after": 33_100,
+                    "system_prompt": self.SYS_PROMPT}]
         wasted, total, eff = self._compute_waste(events, 80_000)
         expected_headroom = CONTEXT_LIMIT - 167_000  # 33k
-        expected_rebuild = 33_100
-        self.assertEqual(wasted, expected_headroom + expected_rebuild)  # 66.1k
+        expected_summary = 33_100 - self.SYS_PROMPT  # 18.8k
+        self.assertEqual(wasted, expected_headroom + expected_summary)  # ~51.8k
         self.assertEqual(total, CONTEXT_LIMIT + 80_000)  # 280k
-        # Efficiency = 1 - 66100/280000 = ~76.4%
-        self.assertAlmostEqual(eff, 1 - 66_100 / 280_000, places=3)
+        self.assertAlmostEqual(eff, 1 - wasted / 280_000, places=3)
 
     def test_two_compactions(self):
-        """Two compactions: waste accumulates headroom + rebuild for each."""
+        """Two compactions: waste accumulates headroom + summary for each."""
         events = [
-            {"context_before": 167_000, "context_after": 33_100},
-            {"context_before": 147_500, "context_after": 24_900},
+            {"context_before": 167_000, "context_after": 33_100,
+             "system_prompt": self.SYS_PROMPT},
+            {"context_before": 147_500, "context_after": 24_900,
+             "system_prompt": self.SYS_PROMPT},
         ]
         wasted, total, eff = self._compute_waste(events, 50_000)
         h1 = CONTEXT_LIMIT - 167_000   # 33k
-        r1 = 33_100
+        s1 = 33_100 - self.SYS_PROMPT  # 18.8k
         h2 = CONTEXT_LIMIT - 147_500   # 52.5k
-        r2 = 24_900
-        self.assertEqual(wasted, h1 + r1 + h2 + r2)  # 143.5k
+        s2 = 24_900 - self.SYS_PROMPT  # 10.6k
+        self.assertEqual(wasted, h1 + s1 + h2 + s2)
         self.assertEqual(total, CONTEXT_LIMIT * 2 + 50_000)  # 450k
-        self.assertAlmostEqual(eff, 1 - 143_500 / 450_000, places=3)
+        self.assertAlmostEqual(eff, 1 - wasted / 450_000, places=3)
 
     def test_efficiency_bounds(self):
         """Efficiency should always be in [0, 1]."""
-        # Edge case: very small context after many compactions
-        events = [{"context_before": 190_000, "context_after": 5_000}]
+        events = [{"context_before": 190_000, "context_after": 5_000,
+                    "system_prompt": self.SYS_PROMPT}]
         wasted, total, eff = self._compute_waste(events, 5_000)
         self.assertGreaterEqual(eff, 0)
         self.assertLessEqual(eff, 1)
@@ -235,21 +248,25 @@ class TestWasteModel(unittest.TestCase):
 # ── Chart rendering ───────────────────────────────────────────────────
 
 class TestHorizontalChart(unittest.TestCase):
+    SYS_PROMPT = 14_328
+
     def _get_lines(self, compact_events, last_context, width=100):
         r = {
             "compact_events": compact_events,
             "last_context": last_context,
+            "system_prompt_tokens": self.SYS_PROMPT,
         }
         segs, comps = _build_segments(r)
         return [strip_ansi(l) for l in _render_horizontal_chart(segs, comps, width)]
 
     def test_header_and_legend(self):
         lines = self._get_lines(
-            [{"context_before": 167_000, "context_after": 33_100}],
+            [{"context_before": 167_000, "context_after": 33_100,
+              "system_prompt": 14_328}],
             80_000,
         )
         self.assertTrue(any("HORIZONTAL" in l for l in lines))
-        self.assertTrue(any("useful" in l and "rebuild" in l and "headroom" in l for l in lines))
+        self.assertTrue(any("useful" in l and "summary" in l and "headroom" in l for l in lines))
 
     def test_segment_labels(self):
         lines = self._get_lines(
@@ -274,12 +291,12 @@ class TestHorizontalChart(unittest.TestCase):
         )
         self.assertTrue(any("compact #1" in l for l in lines))
 
-    def test_detail_shows_survived_and_lost(self):
+    def test_detail_shows_compacted(self):
         lines = self._get_lines(
             [{"context_before": 167_000, "context_after": 33_100}],
             80_000,
         )
-        self.assertTrue(any("survived" in l and "lost" in l for l in lines))
+        self.assertTrue(any("compacted" in l for l in lines))
 
     def test_completed_segment_shows_200k(self):
         lines = self._get_lines(
@@ -291,7 +308,7 @@ class TestHorizontalChart(unittest.TestCase):
 
     def test_no_compactions(self):
         """Single active segment, no compactions — no crash."""
-        r = {"compact_events": [], "last_context": 80_000}
+        r = {"compact_events": [], "last_context": 80_000, "system_prompt_tokens": 0}
         segs, comps = _build_segments(r)
         lines = _render_horizontal_chart(segs, comps, 100)
         clean = [strip_ansi(l) for l in lines]
@@ -299,12 +316,13 @@ class TestHorizontalChart(unittest.TestCase):
         # No compaction markers
         self.assertFalse(any("compact #" in l for l in clean))
 
-    def test_rebuild_shown_in_seg2(self):
+    def test_summary_shown_in_seg2(self):
         lines = self._get_lines(
-            [{"context_before": 167_000, "context_after": 33_100}],
+            [{"context_before": 167_000, "context_after": 33_100,
+              "system_prompt": self.SYS_PROMPT}],
             80_000,
         )
-        # Seg 2 detail should mention rebuild
+        # Seg 2 detail should mention summary and system
         seg2_lines = []
         in_seg2 = False
         for l in lines:
@@ -314,7 +332,8 @@ class TestHorizontalChart(unittest.TestCase):
                 in_seg2 = False
             if in_seg2:
                 seg2_lines.append(l)
-        self.assertTrue(any("rebuild" in l for l in seg2_lines))
+        self.assertTrue(any("summary" in l for l in seg2_lines))
+        self.assertTrue(any("system" in l for l in seg2_lines))
 
     def test_headroom_shown_for_completed(self):
         lines = self._get_lines(
@@ -345,10 +364,13 @@ class TestHorizontalChart(unittest.TestCase):
 
 
 class TestVerticalChart(unittest.TestCase):
+    SYS_PROMPT = 14_328
+
     def _get_lines(self, compact_events, last_context, width=80, height=30):
         r = {
             "compact_events": compact_events,
             "last_context": last_context,
+            "system_prompt_tokens": self.SYS_PROMPT,
         }
         segs, comps = _build_segments(r)
         return [strip_ansi(l) for l in _render_vertical_chart(segs, comps, width, height)]
@@ -359,7 +381,7 @@ class TestVerticalChart(unittest.TestCase):
             80_000,
         )
         self.assertTrue(any("VERTICAL" in l for l in lines))
-        self.assertTrue(any("useful" in l and "rebuild" in l and "headroom" in l for l in lines))
+        self.assertTrue(any("useful" in l and "summary" in l and "headroom" in l for l in lines))
 
     def test_y_axis_labels(self):
         lines = self._get_lines(
@@ -389,7 +411,7 @@ class TestVerticalChart(unittest.TestCase):
 
     def test_no_compactions(self):
         """Single active segment — no crash."""
-        r = {"compact_events": [], "last_context": 80_000}
+        r = {"compact_events": [], "last_context": 80_000, "system_prompt_tokens": 0}
         segs, comps = _build_segments(r)
         lines = _render_vertical_chart(segs, comps, 80, 30)
         self.assertTrue(len(lines) > 0)
@@ -446,14 +468,19 @@ class TestParseTranscript(unittest.TestCase):
             os.unlink(path)
 
     def test_compaction_waste_calculation(self):
-        """Verify waste = headroom + rebuild after compaction."""
-        # Build up context to 167k, then compact, then resume at 33k
+        """Verify waste = headroom + summary after compaction.
+
+        Summary = rebuild context minus system prompt (cache_read).
+        System prompt is constant overhead, not compaction waste.
+        """
+        # Build up context to 167k, then compact, then resume
+        # After compaction: cache_r=5000 (system prompt), rest is summary
         entries = [
             self._make_user_turn(1),
             self._make_assistant_usage(input_t=100000, output_t=67000, turn=1),
             # Compaction fires
             self._make_compaction(),
-            # First response after compaction — this is the rebuild context
+            # First response after compaction
             self._make_user_turn(2),
             self._make_assistant_usage(input_t=25000, cache_r=5000, output_t=3100, turn=2),
         ]
@@ -463,15 +490,18 @@ class TestParseTranscript(unittest.TestCase):
             self.assertEqual(r["compact_count"], 1)
             # context_before = 100000+67000 = 167000
             # context_after = 25000+5000+3100 = 33100
+            # system_prompt = cache_r = 5000
             # headroom = 200000 - 167000 = 33000
-            # rebuild = 33100
-            # wasted = 33000 + 33100 = 66100
-            self.assertEqual(r["tokens_wasted"], 66_100)
+            # summary = 33100 - 5000 = 28100 (rebuild minus system prompt)
+            # wasted = 33000 + 28100 = 61100
+            self.assertEqual(r["tokens_wasted"], 61_100)
+            self.assertEqual(r["system_prompt_tokens"], 5_000)
             self.assertEqual(r["total_context_built"], CONTEXT_LIMIT)
-            # Verify compact event has context_after
+            # Verify compact event
             self.assertEqual(len(r["compact_events"]), 1)
             self.assertEqual(r["compact_events"][0]["context_before"], 167_000)
             self.assertEqual(r["compact_events"][0]["context_after"], 33_100)
+            self.assertEqual(r["compact_events"][0]["system_prompt"], 5_000)
         finally:
             os.unlink(path)
 
@@ -494,11 +524,11 @@ class TestParseTranscript(unittest.TestCase):
         try:
             r = parse_transcript(path)
             self.assertEqual(r["compact_count"], 2)
-            # Compaction 1: peak=167000, after=33100
-            # headroom1 = 200000-167000 = 33000, rebuild1 = 33100 → 66100
-            # Compaction 2: peak=147500, after=24900
-            # headroom2 = 200000-147500 = 52500, rebuild2 = 24900 → 77400
-            self.assertEqual(r["tokens_wasted"], 66_100 + 77_400)  # 143500
+            # Compaction 1: peak=167000, after=33100, system=5000
+            # headroom1 = 33000, summary1 = 33100-5000 = 28100
+            # Compaction 2: peak=147500, after=24900, system=3000
+            # headroom2 = 52500, summary2 = 24900-3000 = 21900
+            self.assertEqual(r["tokens_wasted"], (33_000 + 28_100) + (52_500 + 21_900))
             self.assertEqual(r["total_context_built"], CONTEXT_LIMIT * 2)
         finally:
             os.unlink(path)
@@ -524,6 +554,77 @@ class TestParseTranscript(unittest.TestCase):
 class TestConstants(unittest.TestCase):
     def test_context_limit(self):
         self.assertEqual(CONTEXT_LIMIT, 200_000)
+
+
+# ── parse_transcript required keys ────────────────────────────────
+
+class TestParseTranscriptRequiredKeys(unittest.TestCase):
+    """Ensure parse_transcript returns all keys the monitor dashboard needs.
+
+    This test exists because a refactoring once replaced the full
+    parse_transcript with a simplified version that was missing keys
+    like 'waiting_for_response', causing KeyError at runtime.
+    """
+
+    # Keys the monitor dashboard reads from the parse result
+    REQUIRED_KEYS = {
+        # Session metadata
+        "path", "model", "session_id", "start_time", "end_time",
+        # Counters
+        "turns", "responses", "compact_count", "tokens_wasted",
+        "total_context_built", "thinking_count", "subagent_count",
+        "skill_count", "tool_errors",
+        # Token tracking
+        "tokens", "context_history", "per_response", "context_per_turn",
+        "last_context", "context_at_last_compact",
+        # Compaction
+        "compact_events", "turns_since_compact", "system_prompt_tokens",
+        # Tool tracking
+        "tool_counts", "tool_error_details", "files_read", "files_edited",
+        "recent_tools", "last_error_msg",
+        # Current turn state (dashboard CURRENT section)
+        "turn_tool_counts", "turn_tool_errors",
+        "turn_files_read", "turn_files_edited",
+        "turn_thinking", "turn_agents_spawned",
+        "turn_agents_pending", "turn_skill_active",
+        # Turn timer
+        "last_user_ts", "last_assist_ts", "waiting_for_response",
+        # Event log
+        "event_log", "full_log",
+    }
+
+    def test_empty_file_has_all_keys(self):
+        """Even an empty transcript must return all required keys."""
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
+        f.close()
+        try:
+            r = parse_transcript(f.name)
+            missing = self.REQUIRED_KEYS - set(r.keys())
+            self.assertEqual(missing, set(), f"Missing keys: {missing}")
+        finally:
+            os.unlink(f.name)
+
+    def test_session_with_data_has_all_keys(self):
+        """A real-ish session must return all required keys."""
+        entries = [
+            {"type": "user", "message": {"content": "hello"}, "timestamp": "2025-01-01T00:00:00Z"},
+            {"type": "assistant", "message": {
+                "model": "claude-sonnet-4-20250514",
+                "content": [{"type": "text", "text": "hi"}],
+                "usage": {"input_tokens": 100, "output_tokens": 50,
+                           "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0},
+            }, "timestamp": "2025-01-01T00:00:01Z"},
+        ]
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
+        for entry in entries:
+            f.write(json.dumps(entry) + "\n")
+        f.close()
+        try:
+            r = parse_transcript(f.name)
+            missing = self.REQUIRED_KEYS - set(r.keys())
+            self.assertEqual(missing, set(), f"Missing keys: {missing}")
+        finally:
+            os.unlink(f.name)
 
 
 if __name__ == "__main__":
