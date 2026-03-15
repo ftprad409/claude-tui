@@ -5,10 +5,10 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib import (parse_transcript, format_duration, format_tokens,
-                 get_transcript_path, CONTEXT_LIMIT)
+                 get_transcript_path, get_context_limit, DEFAULT_CONTEXT_LIMIT)
 
 
-def draw_chart(history, width=50, height=10):
+def draw_chart(history, width=50, height=10, context_limit=DEFAULT_CONTEXT_LIMIT):
     """Draw an ASCII chart of context usage over time."""
     # Filter out None (compaction markers) for charting, mark positions
     points = []
@@ -39,7 +39,7 @@ def draw_chart(history, width=50, height=10):
         points = sampled
         compact_indices = compact_sampled
 
-    scale = CONTEXT_LIMIT
+    scale = context_limit
     lines = []
     for row in range(height, -1, -1):
         threshold = row / height * scale
@@ -74,9 +74,10 @@ def main():
         sys.exit(1)
 
     r = parse_transcript(path)
+    ctx_limit = get_context_limit(r["model"])
     duration = format_duration(r["start_time"], r["end_time"])
-    ratio = r["last_context"] / CONTEXT_LIMIT * 100
-    remaining = CONTEXT_LIMIT - r["last_context"]
+    ratio = r["last_context"] / ctx_limit * 100
+    remaining = ctx_limit - r["last_context"]
 
     # Growth rates
     history = [v for v in r["context_history"] if v is not None]
@@ -102,7 +103,7 @@ def main():
 
   Metric              │ Value
   ────────────────────┼──────────────────────────
-  Context used        │ {format_tokens(r['last_context'])} / {format_tokens(CONTEXT_LIMIT)} ({ratio:.1f}%)
+  Context used        │ {format_tokens(r['last_context'])} / {format_tokens(ctx_limit)} ({ratio:.1f}%)
   Remaining capacity  │ {format_tokens(remaining)} ({100 - ratio:.1f}%)
   Turns in session    │ {r['turns']}
   Compactions         │ {r['compact_count']}
@@ -112,7 +113,7 @@ def main():
 
     # Growth chart
     print("### Context Growth Curve\n")
-    chart = draw_chart(r["context_history"])
+    chart = draw_chart(r["context_history"], context_limit=ctx_limit)
     if chart:
         print(chart)
     print()
@@ -151,7 +152,7 @@ def main():
 
     for resp in responses[-15:]:
         delta = resp["ctx"] - prev_ctx
-        pct = resp["ctx"] / CONTEXT_LIMIT * 100
+        pct = resp["ctx"] / ctx_limit * 100
         note = ""
         if delta > avg_delta * 3 and avg_delta > 0:
             note = "large growth"

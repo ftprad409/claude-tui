@@ -14,7 +14,7 @@ import unittest
 # Import from lib and chart modules directly
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from lib import CONTEXT_LIMIT, format_tokens, parse_transcript
+from lib import CONTEXT_LIMIT, DEFAULT_CONTEXT_LIMIT, get_context_limit, format_tokens, parse_transcript
 from chart import _build_segments, _render_horizontal_chart, _render_vertical_chart
 
 # Strip ANSI escape codes for assertion comparisons
@@ -548,11 +548,26 @@ class TestParseTranscript(unittest.TestCase):
             os.unlink(path)
 
 
-# ── CONTEXT_LIMIT constant ─────────────────────────────────────────
+# ── Context limit constants and model detection ──────────────────
 
 class TestConstants(unittest.TestCase):
-    def test_context_limit(self):
-        self.assertEqual(CONTEXT_LIMIT, 200_000)
+    def test_default_context_limit(self):
+        self.assertEqual(DEFAULT_CONTEXT_LIMIT, 200_000)
+        self.assertEqual(CONTEXT_LIMIT, 200_000)  # backward compat
+
+    def test_get_context_limit_opus(self):
+        self.assertEqual(get_context_limit("claude-opus-4-6"), 1_000_000)
+        self.assertEqual(get_context_limit("claude-opus-4-6-20260301"), 1_000_000)
+
+    def test_get_context_limit_sonnet(self):
+        self.assertEqual(get_context_limit("claude-sonnet-4-6"), 200_000)
+
+    def test_get_context_limit_haiku(self):
+        self.assertEqual(get_context_limit("claude-haiku-4-5-20251001"), 200_000)
+
+    def test_get_context_limit_unknown(self):
+        self.assertEqual(get_context_limit(""), 200_000)
+        self.assertEqual(get_context_limit("some-other-model"), 200_000)
 
 
 # ── parse_transcript required keys ────────────────────────────────
@@ -588,6 +603,8 @@ class TestParseTranscriptRequiredKeys(unittest.TestCase):
         "turn_agents_pending", "turn_skill_active",
         # Turn timer
         "last_user_ts", "last_assist_ts", "waiting_for_response",
+        # Context limit
+        "context_limit",
         # Event log
         "event_log", "full_log",
     }

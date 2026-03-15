@@ -5,7 +5,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib import (parse_transcript, get_pricing, calc_cost, format_duration,
-                 format_tokens, get_transcript_path, CONTEXT_LIMIT)
+                 format_tokens, get_transcript_path, get_context_limit)
 
 
 def main():
@@ -15,22 +15,23 @@ def main():
         sys.exit(1)
 
     r = parse_transcript(path)
+    ctx_limit = get_context_limit(r["model"])
     pricing = get_pricing(r["model"])
     cost = calc_cost(r["tokens"], pricing)
     duration = format_duration(r["start_time"], r["end_time"])
-    ratio = r["last_context"] / CONTEXT_LIMIT * 100
+    ratio = r["last_context"] / ctx_limit * 100
 
     # Compaction prediction
     turns_left = "n/a"
     if r["turns_since_compact"] >= 2 and r["last_context"] > 0:
         growth = r["last_context"] / max(r["turns_since_compact"], 1)
-        remaining = CONTEXT_LIMIT - r["last_context"]
+        remaining = ctx_limit - r["last_context"]
         if growth > 0:
             turns_left = str(int(remaining / growth))
 
     W = 40  # value column width
     rows = [
-        ("Context", f"{format_tokens(r['last_context'])} / {format_tokens(CONTEXT_LIMIT)} ({ratio:.1f}%)"),
+        ("Context", f"{format_tokens(r['last_context'])} / {format_tokens(ctx_limit)} ({ratio:.1f}%)"),
         ("Turns", str(r['turns'])),
         ("Duration", duration),
         ("Total Cost", f"${cost['total']:.2f}"),

@@ -32,7 +32,7 @@ from pathlib import Path
 from lib import (
     _visible_len, _truncate_ansi, _visual_rows,
     load_settings, get_setting, reset_settings_cache,
-    MODEL_PRICING, CONTEXT_LIMIT,
+    MODEL_PRICING, CONTEXT_LIMIT, DEFAULT_CONTEXT_LIMIT,
     RESET, BOLD, DIM, GREEN, YELLOW, ORANGE, RED, CYAN, MAGENTA, WHITE, GRAY,
     CLEAR, HIDE_CURSOR, SHOW_CURSOR, ERASE_LINE, ALT_SCREEN_ON, ALT_SCREEN_OFF,
     LOGO_GREEN, M_DARK, M_MID, M_BRIGHT, PULSE_NEW, PULSE_IDLE,
@@ -164,8 +164,9 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     """Render static dashboard sections (session, context, cost, current, session totals)."""
     pricing = get_pricing(r["model"])
     cost = calc_cost(r["tokens"], pricing)
+    ctx_limit = r.get("context_limit", DEFAULT_CONTEXT_LIMIT)
     ctx_used = r["last_context"]
-    ratio = ctx_used / CONTEXT_LIMIT if ctx_used > 0 else 0
+    ratio = ctx_used / ctx_limit if ctx_used > 0 else 0
     duration = format_duration_live(r["start_time"])
     w = min(term_width - 2, 120)  # content width, cap at 120
     bar_width = max(20, min(w - 30, 50))
@@ -178,7 +179,7 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     env_pct = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
     if env_pct.isdigit() and 1 <= int(env_pct) <= 100:
         compact_pct = int(env_pct)
-    compact_ceiling = CONTEXT_LIMIT * compact_pct / 100
+    compact_ceiling = ctx_limit * compact_pct / 100
     turns_left = "—"
     if r["turns_since_compact"] >= 2 and ratio > 0 and ratio < 1.0:
         remaining = compact_ceiling - ctx_used
@@ -283,7 +284,7 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
 
     # Context section
     lines.append(f"  {BOLD}CONTEXT{RESET}")
-    lines.append(f"  {bar}  {color_ratio(ratio)}{ratio * 100:.1f}%{RESET}  {CYAN}{format_tokens(int(ctx_used))}{RESET}{DIM}/{RESET}{GRAY}{format_tokens(CONTEXT_LIMIT)}{RESET}")
+    lines.append(f"  {bar}  {color_ratio(ratio)}{ratio * 100:.1f}%{RESET}  {CYAN}{format_tokens(int(ctx_used))}{RESET}{DIM}/{RESET}{GRAY}{format_tokens(ctx_limit)}{RESET}")
     lines.append(f"  {sparkline}")
     compact_line = f"  {DIM}Compactions:{RESET} {CYAN}{r['compact_count']}{RESET}  {DIM}│{RESET}  {DIM}Turns left:{RESET} {turns_left}  {DIM}│{RESET}  {DIM}Since compact:{RESET} {CYAN}{r['turns_since_compact']}{RESET}"
 

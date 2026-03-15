@@ -17,7 +17,7 @@ import termios
 import tty
 
 from lib import (
-    CONTEXT_LIMIT, RESET, BOLD, DIM, GREEN, YELLOW, ORANGE, RED, CYAN, GRAY,
+    CONTEXT_LIMIT, DEFAULT_CONTEXT_LIMIT, RESET, BOLD, DIM, GREEN, YELLOW, ORANGE, RED, CYAN, GRAY,
     CLEAR, HIDE_CURSOR, SHOW_CURSOR, ALT_SCREEN_ON, ALT_SCREEN_OFF,
     format_tokens, get_terminal_width, parse_transcript,
     find_transcript, find_session_by_id, efficiency_color,
@@ -30,16 +30,18 @@ EFFICIENCY_LEGEND = f"    {CYAN}▒▒{RESET} system   {YELLOW}▓▓{RESET} sum
 
 # ── Segment building ─────────────────────────────────────────────────
 
-def _build_segments(r):
+def _build_segments(r, context_limit=None):
     """Build per-segment data from compact_events and current context.
 
     Each segment shows:
       - system: system prompt tokens (constant overhead, always present)
       - summary: compaction summary tokens (actual compaction cost)
       - useful: new tokens added during this segment
-      - headroom: reserved space for compaction (CONTEXT_LIMIT - peak)
+      - headroom: reserved space for compaction (context_limit - peak)
       - peak: total context at end of segment
     """
+    if context_limit is None:
+        context_limit = r.get("context_limit", DEFAULT_CONTEXT_LIMIT)
     segments = []
     num_compactions = 0
     sys_prompt = r.get("system_prompt_tokens", 0)
@@ -47,7 +49,7 @@ def _build_segments(r):
     prev_system = sys_prompt  # first segment also has system prompt
     for evt in r["compact_events"]:
         peak = evt["context_before"]
-        headroom = max(0, CONTEXT_LIMIT - peak)
+        headroom = max(0, context_limit - peak)
         summary = max(0, prev_rebuild - prev_system)
         useful = peak - prev_system - summary  # exclude system & summary shown separately
         segments.append({
@@ -78,11 +80,11 @@ def _build_segments(r):
 
 # ── Horizontal chart ──────────────────────────────────────────────────
 
-def _render_horizontal_chart(segments, num_compactions, w):
+def _render_horizontal_chart(segments, num_compactions, w, context_limit=DEFAULT_CONTEXT_LIMIT):
     """Render horizontal bar chart of segments."""
     lines = []
-    # Scale all bars to CONTEXT_LIMIT so completed segments show full width
-    scale_ref = CONTEXT_LIMIT
+    # Scale all bars to context_limit so completed segments show full width
+    scale_ref = context_limit
     bar_width = max(20, w - 24)
 
     lines.append(f"  {BOLD}CONTEXT EFFICIENCY — HORIZONTAL{RESET}")
@@ -137,7 +139,7 @@ def _render_horizontal_chart(segments, num_compactions, w):
 
         peak_str = format_tokens(int(seg["peak"]))
         if not is_active:
-            lines.append(f"  {BOLD}{label}{RESET}  {bar}  {GRAY}{format_tokens(CONTEXT_LIMIT)}{RESET}")
+            lines.append(f"  {BOLD}{label}{RESET}  {bar}  {GRAY}{format_tokens(context_limit)}{RESET}")
         else:
             lines.append(f"  {BOLD}{label}{RESET}  {bar}  {GRAY}{peak_str}{RESET}")
 
@@ -164,10 +166,10 @@ def _render_horizontal_chart(segments, num_compactions, w):
 
 # ── Vertical chart ────────────────────────────────────────────────────
 
-def _render_vertical_chart(segments, num_compactions, w, h):
+def _render_vertical_chart(segments, num_compactions, w, h, context_limit=DEFAULT_CONTEXT_LIMIT):
     """Render vertical stacked bar chart of segments."""
     lines = []
-    scale_ref = CONTEXT_LIMIT
+    scale_ref = context_limit
     chart_height = max(8, min(h - 12, 20))
     col_width = max(6, min(12, (w - 10) // max(len(segments), 1)))
     num_cols = min(len(segments), (w - 10) // col_width)
@@ -194,9 +196,9 @@ def _render_vertical_chart(segments, num_compactions, w, h):
     # Y-axis labels
     for row in range(chart_height, 0, -1):
         if row == chart_height:
-            y_label = format_tokens(CONTEXT_LIMIT)
+            y_label = format_tokens(context_limit)
         elif row == chart_height // 2:
-            y_label = format_tokens(CONTEXT_LIMIT // 2)
+            y_label = format_tokens(context_limit // 2)
         elif row == 1:
             y_label = "0"
         else:
@@ -269,7 +271,7 @@ def _show_info(out):
         f"  {GREEN}██ useful{RESET}    Your actual work: prompts, responses, tool calls, code",
         f"               edits, file reads, test output.",
         "",
-        f"  {GRAY}░░ headroom{RESET}  Unused capacity. Compaction triggers at ~83% (167k of 200k).",
+        f"  {GRAY}░░ headroom{RESET}  Unused capacity. Compaction triggers at ~83% of context window.",
         f"               The remaining ~33k is reserved for the compaction process.",
         "",
         f"  {BOLD}Summary line:{RESET}",
@@ -337,10 +339,11 @@ def show_efficiency_chart(r, term_width, transcript_path=None):
         lines.append("")
         w = term_width - 2
 
+        ctx_limit = r.get("context_limit", DEFAULT_CONTEXT_LIMIT)
         if mode == "horizontal":
-            lines.extend(_render_horizontal_chart(segments, num_compactions, w))
+            lines.extend(_render_horizontal_chart(segments, num_compactions, w, context_limit=ctx_limit))
         else:
-            lines.extend(_render_vertical_chart(segments, num_compactions, w, term_height))
+            lines.extend(_render_vertical_chart(segments, num_compactions, w, term_height, context_limit=ctx_limit))
 
         # Summary
         lines.append("")

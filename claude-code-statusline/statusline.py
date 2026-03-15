@@ -26,8 +26,19 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
-# Full context window size (200k for Claude models)
-CONTEXT_LIMIT = 200_000
+# Context window sizes by model family
+MODEL_CONTEXT_WINDOW = {
+    "claude-opus-4": 1_000_000,   # 1M context via anthropic-beta flag
+}
+DEFAULT_CONTEXT_LIMIT = 200_000
+
+
+def get_context_limit(model_id):
+    """Get context window size for a model ID."""
+    for key, limit in MODEL_CONTEXT_WINDOW.items():
+        if key in model_id:
+            return limit
+    return DEFAULT_CONTEXT_LIMIT
 
 # Pricing per million tokens (as of 2025)
 # https://docs.anthropic.com/en/docs/about-claude/models
@@ -226,8 +237,10 @@ def get_model_pricing(model_id):
     return MODEL_PRICING["claude-sonnet-4-6"]
 
 
-def parse_transcript(transcript_path):
+def parse_transcript(transcript_path, context_limit=None):
     """Parse transcript file to extract all session metrics."""
+    if context_limit is None:
+        context_limit = DEFAULT_CONTEXT_LIMIT
     result = {
         "context_tokens": 0,
         "input_tokens_total": 0,
@@ -361,7 +374,7 @@ def parse_transcript(transcript_path):
                 if result["compact_count"] > 0 and result.get("_ctx_before_compact", 0) > 0:
                     pre = result["_ctx_before_compact"]
                     cache_r = usage.get("cache_read_input_tokens", 0)
-                    headroom = max(0, CONTEXT_LIMIT - pre)
+                    headroom = max(0, context_limit - pre)
                     summary = max(0, ctx_snapshot - cache_r)
                     result["tokens_wasted"] += headroom + summary
 
@@ -385,7 +398,7 @@ def parse_transcript(transcript_path):
             result["compact_count"] += 1
             result["context_history"].append(None)
             result["_ctx_before_compact"] = result["_pre_compact_ctx"]
-            result["total_context_built"] += CONTEXT_LIMIT  # full window budget per segment
+            result["total_context_built"] += context_limit  # full window budget per segment
             result["turns_since_compact"] = 0
             result["context_at_last_compact"] = -1  # sentinel: next usage will set baseline
             result["context_per_turn"] = []  # reset per-turn tracking
@@ -602,15 +615,18 @@ def main():
     transcript_path = data.get("transcript_path", "")
     session_id = data.get("session_id", "")[:8]
 
+    # Resolve context window size from model
+    context_limit = get_context_limit(model_id)
+
     # Parse transcript for all metrics
-    metrics = parse_transcript(transcript_path)
+    metrics = parse_transcript(transcript_path, context_limit=context_limit)
 
     # Context usage bar
     ctx_used = metrics["context_tokens"]
-    ratio = ctx_used / CONTEXT_LIMIT if CONTEXT_LIMIT > 0 else 0
+    ratio = ctx_used / context_limit if context_limit > 0 else 0
     bar = build_progress_bar(ratio)
     tokens_str = format_tokens(int(ctx_used))
-    limit_str = format_tokens(CONTEXT_LIMIT)
+    limit_str = format_tokens(context_limit)
 
     # Session cost
     pricing = get_model_pricing(model_id)
@@ -683,7 +699,7 @@ def main():
         env_pct = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
         if env_pct.isdigit() and 1 <= int(env_pct) <= 100:
             compact_pct = int(env_pct)
-        compact_ceiling = CONTEXT_LIMIT * compact_pct / 100
+        compact_ceiling = context_limit * compact_pct / 100
         remaining_tokens = compact_ceiling - ctx_used
 
         # Compute growth rate using EMA on per-turn context deltas

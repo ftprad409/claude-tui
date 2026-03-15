@@ -12,7 +12,20 @@ MODEL_PRICING = {
     "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "output": 15.0},
     "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "output": 4.0},
 }
-CONTEXT_LIMIT = 200_000
+# Context window sizes by model family
+MODEL_CONTEXT_WINDOW = {
+    "claude-opus-4": 1_000_000,   # 1M context via anthropic-beta flag
+}
+DEFAULT_CONTEXT_LIMIT = 200_000
+CONTEXT_LIMIT = DEFAULT_CONTEXT_LIMIT  # backward compat
+
+
+def get_context_limit(model_id):
+    """Get context window size for a model ID."""
+    for key, limit in MODEL_CONTEXT_WINDOW.items():
+        if key in model_id:
+            return limit
+    return DEFAULT_CONTEXT_LIMIT
 
 
 def find_transcript(cwd=None):
@@ -202,6 +215,7 @@ def parse_transcript(path):
 
     r["subagent_count"] = len(subagents)
     r["last_context"] = last_context
+    r["context_limit"] = get_context_limit(r["model"])
     return r
 
 

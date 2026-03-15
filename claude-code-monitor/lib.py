@@ -98,7 +98,20 @@ MODEL_PRICING = {
     "claude-sonnet-3-5": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
     "claude-haiku-3-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
 }
-CONTEXT_LIMIT = 200_000
+# Context window sizes by model family
+MODEL_CONTEXT_WINDOW = {
+    "claude-opus-4": 1_000_000,   # 1M context via anthropic-beta flag
+}
+DEFAULT_CONTEXT_LIMIT = 200_000
+CONTEXT_LIMIT = DEFAULT_CONTEXT_LIMIT  # backward compat for tests
+
+
+def get_context_limit(model_id):
+    """Get context window size for a model ID."""
+    for key, limit in MODEL_CONTEXT_WINDOW.items():
+        if key in model_id:
+            return limit
+    return DEFAULT_CONTEXT_LIMIT
 
 
 # ── ANSI codes ────────────────────────────────────────────────────────
@@ -222,6 +235,7 @@ def parse_transcript(path):
     except (FileNotFoundError, PermissionError):
         return r
 
+    context_limit = DEFAULT_CONTEXT_LIMIT  # resolved when model is detected
     subagents = set()
     agent_labels = {}  # tool_use_id -> description
     current_turn = 0
@@ -244,6 +258,8 @@ def parse_transcript(path):
             r["end_time"] = ts
         if not r["model"] and etype == "assistant" and "message" in obj:
             r["model"] = obj["message"].get("model", "")
+            if r["model"]:
+                context_limit = get_context_limit(r["model"])
 
         # User turns
         if etype == "user" and not obj.get("isMeta"):
@@ -441,7 +457,7 @@ def parse_transcript(path):
                         evt["system_prompt"] = cache_r
                         pre = evt["context_before"]
                         if pre > 0:
-                            headroom = max(0, CONTEXT_LIMIT - pre)
+                            headroom = max(0, context_limit - pre)
                             summary = max(0, ctx - cache_r)  # rebuild minus system prompt
                             r["tokens_wasted"] += headroom + summary
                 # Track per-turn context (last snapshot per turn wins)
@@ -457,7 +473,7 @@ def parse_transcript(path):
         if (etype == "summary" or
                 (etype == "system" and obj.get("subtype") == "compact_boundary")):
             r["compact_count"] += 1
-            r["total_context_built"] += CONTEXT_LIMIT  # full window budget per segment
+            r["total_context_built"] += context_limit  # full window budget per segment
             r["context_history"].append(None)
             r["event_log"].append((ts, f"⚡ compaction #{r['compact_count']}"))
             r["compact_events"].append({
@@ -481,6 +497,7 @@ def parse_transcript(path):
         r["event_log"] = r["event_log"][-max_log:]
     else:
         r["event_log"] = r["event_log"][-8:]  # invalid config, fallback
+    r["context_limit"] = context_limit
     return r
 
 # ── Formatting helpers ────────────────────────────────────────────────
