@@ -108,7 +108,8 @@ Claude Code hooks for automatic in-session context. Three hook scripts:
 ## Testing
 
 ```bash
-python3 claude-code-monitor/test_monitor.py -v   # unit tests (parsing, waste model, chart)
+python3 claude-code-monitor/test_monitor.py -v   # monitor: parsing, waste model, chart
+python3 claude-code-sniffer/test_sniffer.py -v   # sniffer: formatters, SSE, session tracker, compaction
 ```
 
 Quick syntax check for all tools:
