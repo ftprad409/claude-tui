@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ClaudeTUI is a collection of standalone utilities for Claude Code. Each tool lives in its own subdirectory with its own README.
 
+### Top-Level Scripts
+
+- `claudetui.py` — CLI dispatcher. Routes all `claudetui *` subcommands to the correct tool. Detects version from git tags, falls back to `_FALLBACK_VERSION`. Also implements the `sniff` launcher (auto-detects sniffer port, sets `ANTHROPIC_BASE_URL`, execs `claude`).
+- `claude-ui-mode.py` — Statusline mode switcher. `claudetui mode full|compact|custom`. The `custom` subcommand launches a curses TUI for toggling components.
+- `install.sh` / `uninstall.sh` — Configures `~/.claude/settings.json` (statusLine, hooks), installs commands to `~/.claude/commands/tui/`, symlinks `claudetui` to PATH.
+
 ## Tools
 
 ### claude-code-statusline
@@ -15,19 +21,11 @@ Real-time status bar for Claude Code. Single-file script.
 - Entry point: `claude-code-statusline/statusline.py`
 - Reads session JSON from stdin (provided by Claude Code's `statusLine` feature)
 - Parses the transcript JSONL file for token usage, compaction events, tool calls, errors, turns, cache ratio, and thinking blocks
-- Three modes: `full` (3-line with sparkline, telemetry, tool trace), `compact` (1-line essentials), `custom` (configurable components)
-- Mode switch: `claudetui mode full|compact|custom` (single Python script: `claude-ui-mode.py`), or `--compact` flag
-- Custom mode: `claudetui mode custom` launches curses TUI (arrow keys + space) to toggle individual components per line
-- Custom config stored in `~/.claude/claudeui.json` under `"custom"` key, with `is_visible(line, component)` helper
-- CLI flags: `--hide`, `--show`, `--widget`, `--preset`, `--list` for non-interactive configuration
-- Presets: `all` (everything visible), `minimal` (essentials only), `focused` (hides model, token count, cost, session ID, cwd, cost/turn, agents)
-- Pluggable widget system on the left (3×7 grid): `matrix`, `hex`, `bars`, `progress`, `none`
-- Widget selection via `custom.widget` in claudeui.json or `STATUSLINE_WIDGET` env var (config takes precedence)
-- Widget functions: `widget_fn(frame, ratio) -> list[str]` returning 3 rows
-- Compaction entries use `{"type": "system", "subtype": "compact_boundary"}` in transcript JSONL
-- Thinking blocks use `{"type": "thinking"}` in assistant message content (token counts redacted)
+- Three modes: `full` (3-line), `compact` (1-line), `custom` (configurable). Switch via `claudetui mode`
+- Custom config: `~/.claude/claudeui.json` under `"custom"` key, with `is_visible(line, component)` helper
+- Pluggable widget system (3x7 grid): `matrix`, `hex`, `bars`, `progress`, `none`
 - Context window: auto-detected from model ID (`claude-opus-4` → 1M, others → 200k)
-- Compaction prediction: fixed 33k buffer model (`context_limit - 33_000`), not percentage-based
+- Compaction prediction: fixed 33k buffer model (`context_limit - COMPACT_BUFFER`), not percentage-based
 - Progress bar colors scale relative to compaction ceiling, not raw percentage
 
 ### claude-code-session-stats
@@ -110,10 +108,15 @@ Claude Code hooks for automatic in-session context. Three hook scripts:
 ## Testing
 
 ```bash
-python3 claude-code-monitor/test_monitor.py -v
+python3 claude-code-monitor/test_monitor.py -v   # unit tests (parsing, waste model, chart)
 ```
 
-Tests cover: transcript parsing, waste model (headroom + summary), segment building, chart rendering (horizontal/vertical), and format helpers. Run before and after refactoring to verify no regressions.
+Quick syntax check for all tools:
+```bash
+python3 -c "import py_compile; [py_compile.compile(f, doraise=True) for f in ['claude-code-statusline/statusline.py', 'claude-code-monitor/lib.py', 'claude-code-monitor/monitor.py', 'claude-code-monitor/chart.py', 'claude-code-sniffer/sniffer.py', 'claude-code-commands/tui/lib.py', 'claudetui.py']]"
+```
+
+Run tests before and after refactoring to verify no regressions.
 
 ## Local Development
 
@@ -138,6 +141,18 @@ python3 claudetui.py mode custom     # test the configurator TUI
 python3 claudetui.py mode --help     # test CLI
 python3 claudetui.py --help          # test dispatcher
 ```
+
+## Release Workflow
+
+1. Bump `_FALLBACK_VERSION` in `claudetui.py`
+2. Commit, tag (`git tag v0.X.Y`), push with `--tags`
+3. Version is auto-detected from git tags at runtime; fallback used for curl/brew installs
+
+## Gotchas
+
+- **Duplicated constants**: `MODEL_PRICING`, `MODEL_CONTEXT_WINDOW`, `COMPACT_BUFFER`, and `get_context_limit()` exist in 3 places: `statusline.py`, `monitor/lib.py`, and `commands/tui/lib.py`. The statusline is self-contained (no imports from monitor); commands are standalone too. Keep all three in sync when updating pricing or adding models.
+- **Transcript format**: Compaction entries use `{"type": "system", "subtype": "compact_boundary"}`. Thinking blocks use `{"type": "thinking"}` in assistant message content (token counts redacted by the API).
+- **Widget API**: Widget functions have signature `widget_fn(frame, ratio) -> list[str]` returning exactly 3 rows.
 
 ## Conventions
 
