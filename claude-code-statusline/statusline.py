@@ -584,16 +584,26 @@ def build_sparkline(values, width=20):
 
 
 
-def build_progress_bar(ratio, length=20):
-    """Build a colored progress bar string."""
+def build_progress_bar(ratio, length=20, compact_ratio=None):
+    """Build a colored progress bar string.
+
+    Colors are based on proximity to compaction, not raw percentage.
+    compact_ratio is the ratio at which compaction triggers (e.g. 0.967 for 1M).
+    """
     filled = int(length * min(ratio, 1.0))
     bar = "█" * filled + "░" * (length - filled)
 
-    if ratio < 0.50:
+    if compact_ratio and compact_ratio > 0:
+        # Color by how full we are relative to compaction ceiling
+        fill_of_ceiling = ratio / compact_ratio
+    else:
+        fill_of_ceiling = ratio
+
+    if fill_of_ceiling < 0.60:
         color = GREEN
-    elif ratio < 0.70:
+    elif fill_of_ceiling < 0.85:
         color = YELLOW
-    elif ratio < 0.80:
+    elif fill_of_ceiling < 0.95:
         color = ORANGE
     else:
         color = RED
@@ -626,7 +636,8 @@ def main():
     # Context usage bar
     ctx_used = metrics["context_tokens"]
     ratio = ctx_used / context_limit if context_limit > 0 else 0
-    bar = build_progress_bar(ratio)
+    compact_ratio = (context_limit - COMPACT_BUFFER) / context_limit if context_limit > 0 else 0.83
+    bar = build_progress_bar(ratio, compact_ratio=compact_ratio)
     tokens_str = format_tokens(int(ctx_used))
     limit_str = format_tokens(context_limit)
 

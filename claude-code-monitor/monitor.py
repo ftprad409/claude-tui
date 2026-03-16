@@ -50,22 +50,26 @@ _original_termios = None
 
 # ── Dashboard rendering ─────────────────────────────────────────────
 
-def color_ratio(ratio):
-    """Get color for a context ratio."""
-    if ratio < 0.50:
+def color_ratio(ratio, compact_ratio=None):
+    """Get color for a context ratio based on proximity to compaction."""
+    if compact_ratio and compact_ratio > 0:
+        fill = ratio / compact_ratio
+    else:
+        fill = ratio
+    if fill < 0.60:
         return GREEN
-    elif ratio < 0.70:
+    elif fill < 0.85:
         return YELLOW
-    elif ratio < 0.80:
+    elif fill < 0.95:
         return ORANGE
     return RED
 
 
-def build_bar(ratio, width=30):
+def build_bar(ratio, width=30, compact_ratio=None):
     """Build a colored progress bar."""
     filled = int(width * min(ratio, 1.0))
     bar = "█" * filled + "░" * (width - filled)
-    return f"{color_ratio(ratio)}{bar}{RESET}"
+    return f"{color_ratio(ratio, compact_ratio)}{bar}{RESET}"
 
 
 def build_sparkline(values, width=50):
@@ -167,10 +171,11 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     ctx_limit = r.get("context_limit", DEFAULT_CONTEXT_LIMIT)
     ctx_used = r["last_context"]
     ratio = ctx_used / ctx_limit if ctx_used > 0 else 0
+    compact_ratio = (ctx_limit - COMPACT_BUFFER) / ctx_limit if ctx_limit > 0 else 0.83
     duration = format_duration_live(r["start_time"])
     w = min(term_width - 2, 120)  # content width, cap at 120
     bar_width = max(20, min(w - 30, 50))
-    bar = build_bar(ratio, bar_width)
+    bar = build_bar(ratio, bar_width, compact_ratio=compact_ratio)
     spark_width = max(20, min(w - 10, 80))
     sparkline = build_sparkline(r["context_history"], spark_width)
 
@@ -283,7 +288,7 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
 
     # Context section
     lines.append(f"  {BOLD}CONTEXT{RESET}")
-    lines.append(f"  {bar}  {color_ratio(ratio)}{ratio * 100:.1f}%{RESET}  {CYAN}{format_tokens(int(ctx_used))}{RESET}{DIM}/{RESET}{GRAY}{format_tokens(ctx_limit)}{RESET}")
+    lines.append(f"  {bar}  {color_ratio(ratio, compact_ratio)}{ratio * 100:.1f}%{RESET}  {CYAN}{format_tokens(int(ctx_used))}{RESET}{DIM}/{RESET}{GRAY}{format_tokens(ctx_limit)}{RESET}")
     lines.append(f"  {sparkline}")
     compact_line = f"  {DIM}Compactions:{RESET} {CYAN}{r['compact_count']}{RESET}  {DIM}│{RESET}  {DIM}Turns left:{RESET} {turns_left}  {DIM}│{RESET}  {DIM}Since compact:{RESET} {CYAN}{r['turns_since_compact']}{RESET}"
 
