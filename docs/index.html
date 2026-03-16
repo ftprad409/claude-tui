@@ -493,7 +493,7 @@
           <div class="terminal-title">claude — statusline (full mode)</div>
         </div>
         <div class="terminal-body">
-<div class="line"> <span class="t-green-dark">0</span><span class="t-green-dim">1</span><span class="t-green">1</span><span class="t-green-dark">0</span><span class="t-green-dim">1</span><span class="t-green-dark">0</span><span class="t-green">0</span> <span class="t-bold t-magenta">Opus 4.6</span> <span class="t-dim">│</span> <span class="t-green">████████</span><span class="t-dim">░░░░░░░░░░░░</span> <span class="t-cyan">42%</span> <span class="t-cyan">65.5k</span><span class="t-dim">/</span><span class="t-dim">200.0k</span> <span class="t-dim">│</span> <span class="t-green">~24 turns left</span> <span class="t-dim">│</span> <span class="t-green">▁</span><span class="t-green">▂</span><span class="t-yellow">▃</span><span class="t-yellow">▅</span><span class="t-orange">▆</span><span class="t-orange">▇</span><span class="t-dim">↓</span><span class="t-green">▁</span><span class="t-green">▃</span><span class="t-yellow">▅</span> <span class="t-dim">│</span> <span class="t-yellow">$2.34</span> <span class="t-dim">│</span> 12m <span class="t-dim">│</span> <span class="t-cyan">0</span><span class="t-dim">x compact</span> <span class="t-dim">│</span> <span class="t-dim">#a1b2c3d4</span></div>
+<div class="line"> <span class="t-green-dark">0</span><span class="t-green-dim">1</span><span class="t-green">1</span><span class="t-green-dark">0</span><span class="t-green-dim">1</span><span class="t-green-dark">0</span><span class="t-green">0</span> <span class="t-bold t-magenta">Opus 4.6</span> <span class="t-dim">│</span> <span class="t-green">████████</span><span class="t-dim">░░░░░░░░░░░░</span> <span class="t-cyan">42%</span> <span class="t-cyan">415.7k</span><span class="t-dim">/</span><span class="t-dim">1.0M</span> <span class="t-dim">│</span> <span class="t-green">~24 turns left</span> <span class="t-dim">│</span> <span class="t-green">▁</span><span class="t-green">▂</span><span class="t-yellow">▃</span><span class="t-yellow">▅</span><span class="t-orange">▆</span><span class="t-orange">▇</span><span class="t-dim">↓</span><span class="t-green">▁</span><span class="t-green">▃</span><span class="t-yellow">▅</span> <span class="t-dim">│</span> <span class="t-yellow">$2.34</span> <span class="t-dim">│</span> 12m <span class="t-dim">│</span> <span class="t-cyan">0</span><span class="t-dim">x compact</span> <span class="t-dim">│</span> <span class="t-dim">#a1b2c3d4</span></div>
 <div class="line"> <span class="t-green-dark">1</span><span class="t-green-dim">0</span><span class="t-green-dark">0</span><span class="t-green">1</span><span class="t-green-dark">0</span><span class="t-green-dim">1</span><span class="t-green">1</span> <span class="t-green">ai-toolbox</span> <span class="t-dim">│</span> <span class="t-magenta">main</span> <span class="t-green">+42</span> <span class="t-red">-17</span> <span class="t-dim">│</span> <span class="t-cyan">18</span> <span class="t-dim">turns</span> <span class="t-dim">│</span> <span class="t-cyan">5</span> <span class="t-dim">files</span> <span class="t-dim">│</span> <span class="t-cyan">0</span> <span class="t-dim">err</span> <span class="t-dim">│</span> <span class="t-green">82%</span> <span class="t-dim">cache</span> <span class="t-dim">│</span> <span class="t-cyan">4</span><span class="t-dim">x think</span> <span class="t-dim">│</span> ~<span class="t-yellow">$0.13</span><span class="t-dim">/turn</span></div>
 <div class="line"> <span class="t-green-dim">0</span><span class="t-green">1</span><span class="t-green-dark">1</span><span class="t-green-dim">0</span><span class="t-green-dark">0</span><span class="t-green">1</span><span class="t-green-dark">0</span> <span class="t-dim">read</span> <span class="t-green">statusline.py</span> <span class="t-dim">→</span> <span class="t-dim">edit</span> <span class="t-green">statusline.py</span> <span class="t-dim">→</span> <span class="t-dim">bash</span> <span class="t-green">python3</span> <span class="t-dim">→</span> <span class="t-dim">edit</span> <span class="t-green">README.md</span> <span class="t-dim">│</span> <span class="t-yellow">statusline.py</span><span class="t-dim">×3</span> <span class="t-yellow">README.md</span><span class="t-dim">×1</span></div>
         </div>
@@ -532,6 +532,11 @@
           <p>Automatic context injected into sessions — file activity heatmap on start, reverse dependency warnings after edits, high churn alerts before edits.</p>
         </div>
         <div class="feature-card">
+          <span class="feature-icon">⇄ proxy</span>
+          <h3>API Sniffer</h3>
+          <p>Transparent proxy that intercepts all API calls. See tokens, cost, latency, cache ratio, content block types, sub-agent tracking, and compaction detection in real-time.</p>
+        </div>
+        <div class="feature-card">
           <span class="feature-icon">/tui:*</span>
           <h3>Slash Commands</h3>
           <p>In-session analytics on demand: <code>/tui:session</code> <code>/tui:cost</code> <code>/tui:perf</code> <code>/tui:context</code> for deep reports without leaving Claude Code.</p>
@@ -547,17 +552,17 @@
       <p class="subtitle">Real-time status bar with everything you need at a glance</p>
       <div class="tool-terminal">
 <div class="line"><span class="t-dim">Full mode (3-line):</span></div>
-<div class="line"> <span class="t-bold t-magenta">Opus 4.6</span> <span class="t-dim">│</span> <span class="t-yellow">████████████████</span><span class="t-dim">░░░░</span> <span class="t-yellow">78%</span> <span class="t-cyan">155.2k</span><span class="t-dim">/200.0k</span> <span class="t-dim">│</span> <span class="t-yellow">~8 turns left</span> <span class="t-dim">│</span> <span class="t-yellow">$12.47</span> <span class="t-dim">│</span> 2h 10m <span class="t-dim">│</span> <span class="t-cyan">1</span><span class="t-dim">x compact</span></div>
+<div class="line"> <span class="t-bold t-magenta">Opus 4.6</span> <span class="t-dim">│</span> <span class="t-yellow">████████████████</span><span class="t-dim">░░░░</span> <span class="t-yellow">78%</span> <span class="t-cyan">755.2k</span><span class="t-dim">/1.0M</span> <span class="t-dim">│</span> <span class="t-yellow">~8 turns left</span> <span class="t-dim">│</span> <span class="t-yellow">$12.47</span> <span class="t-dim">│</span> 2h 10m <span class="t-dim">│</span> <span class="t-cyan">1</span><span class="t-dim">x compact</span></div>
 <div class="line"> <span class="t-green">my-app</span> <span class="t-dim">│</span> <span class="t-magenta">feature/auth</span> <span class="t-green">+120</span> <span class="t-red">-45</span> <span class="t-dim">│</span> <span class="t-cyan">56</span> <span class="t-dim">turns</span> <span class="t-dim">│</span> <span class="t-cyan">12</span> <span class="t-dim">files</span> <span class="t-dim">│</span> <span class="t-green">78%</span> <span class="t-dim">cache</span></div>
 <div class="line"> <span class="t-dim">read</span> <span class="t-green">auth.ts</span> <span class="t-dim">→</span> <span class="t-dim">edit</span> <span class="t-green">auth.ts</span> <span class="t-dim">→</span> <span class="t-dim">bash</span> <span class="t-green">npm test</span> <span class="t-dim">│</span> <span class="t-yellow">auth.ts</span><span class="t-dim">×2</span></div>
 <div class="line"></div>
 <div class="line"><span class="t-dim">Compact mode (1-line):</span></div>
-<div class="line"> <span class="t-bold t-magenta">Opus 4.6</span> <span class="t-dim">│</span> <span class="t-yellow">████████████████</span><span class="t-dim">░░░░</span> <span class="t-yellow">78%</span> <span class="t-cyan">155.2k</span><span class="t-dim">/200.0k</span> <span class="t-dim">│</span> <span class="t-yellow">$12.47</span> <span class="t-dim">│</span> 2h 10m <span class="t-dim">│</span> <span class="t-cyan">56</span> <span class="t-dim">turns</span> <span class="t-dim">│</span> <span class="t-cyan">1</span><span class="t-dim">x</span>compact</div>
+<div class="line"> <span class="t-bold t-magenta">Opus 4.6</span> <span class="t-dim">│</span> <span class="t-yellow">████████████████</span><span class="t-dim">░░░░</span> <span class="t-yellow">78%</span> <span class="t-cyan">755.2k</span><span class="t-dim">/1.0M</span> <span class="t-dim">│</span> <span class="t-yellow">$12.47</span> <span class="t-dim">│</span> 2h 10m <span class="t-dim">│</span> <span class="t-cyan">56</span> <span class="t-dim">turns</span> <span class="t-dim">│</span> <span class="t-cyan">1</span><span class="t-dim">x</span>compact</div>
       </div>
       <ul class="feature-list">
-        <li>Context progress bar with color thresholds</li>
-        <li>Context usage sparkline with compaction markers</li>
-        <li>Compaction prediction (turns remaining)</li>
+        <li>Context progress bar with compaction-aware colors</li>
+        <li>Auto-detects context window (200k or 1M for Opus 4)</li>
+        <li>Compaction prediction based on 33k buffer model</li>
         <li>Session cost and cost-per-turn</li>
         <li>Cache hit ratio</li>
         <li>Git branch and diff stats</li>
@@ -590,7 +595,7 @@
 <div class="line">  <span class="t-dim">○</span> <span class="t-bold t-magenta">claude-opus-4-6</span>  <span class="t-dim">│</span>  <span class="t-dim">#a1b2c3d4</span>  <span class="t-dim">│</span>  <span class="t-bright">2h 15m 30s</span>  <span class="t-dim">│</span>  <span class="t-green">ACTIVE</span></div>
 <div class="line"></div>
 <div class="line">  <span class="t-bold t-bright">CONTEXT</span></div>
-<div class="line">  <span class="t-yellow">████████████████</span><span class="t-dim">░░░░░░░░░░░░░░░░░░░░░░░░</span>  <span class="t-yellow">40.2%</span>  <span class="t-cyan">80.3k</span><span class="t-dim">/200.0k</span></div>
+<div class="line">  <span class="t-yellow">████████████████</span><span class="t-dim">░░░░░░░░░░░░░░░░░░░░░░░░</span>  <span class="t-yellow">40.2%</span>  <span class="t-cyan">402.0k</span><span class="t-dim">/1.0M</span></div>
 <div class="line">  <span class="t-green">▃▃</span><span class="t-yellow">▄▅▅</span><span class="t-orange">▆▇▇▇</span><span class="t-dim">↓↓</span><span class="t-yellow">▄▄▄▅▅▅</span><span class="t-orange">▆▇▇</span><span class="t-dim">↓</span><span class="t-green">▃▃▃</span><span class="t-yellow">▄▄▄▄▅</span><span class="t-orange">▆▆▇▇</span><span class="t-dim">↓</span><span class="t-green">▃</span><span class="t-yellow">▄▄▅</span><span class="t-orange">▆▆▇▇▇</span><span class="t-dim">↓</span><span class="t-green">▃▃</span><span class="t-yellow">▄▄▄▅▅▅▅</span><span class="t-orange">▆▆▆▇▇▇</span><span class="t-dim">↓</span></div>
 <div class="line">  <span class="t-dim">Compactions:</span> <span class="t-cyan">6</span>  <span class="t-dim">│</span>  <span class="t-dim">Turns left:</span> <span class="t-yellow">~5</span>  <span class="t-dim">│</span>  <span class="t-dim">Since compact:</span> <span class="t-cyan">4</span></div>
 <div class="line"></div>
@@ -663,6 +668,36 @@
 <div class="line">  <span class="t-dim">──────────────────────────────────────────────────────────────────</span></div>
 <div class="line">  <span class="t-bold">Total</span>                  13h 20m <span class="t-yellow">$ 97.79</span></div>
       </div>
+    </div>
+  </section>
+
+  <!-- Sniffer detail -->
+  <section class="tool-section">
+    <div class="container">
+      <h2>API Sniffer</h2>
+      <p class="subtitle">Intercept every API call between Claude Code and Anthropic — run <code>claudetui sniffer</code></p>
+      <div class="tool-terminal">
+<div class="line"><span class="t-dim">$</span> <span class="t-bright">claudetui sniffer</span>           <span class="t-dim"># Terminal 1: start proxy</span></div>
+<div class="line"><span class="t-dim">$</span> <span class="t-bright">claudetui sniff</span>             <span class="t-dim"># Terminal 2: launch Claude through it</span></div>
+<div class="line"></div>
+<div class="line">  <span class="t-green">#1</span>  POST /v1/messages  <span class="t-cyan">opus-4-6</span>  132.6k<span class="t-dim">-></span>459  <span class="t-dim">$0.237</span>  <span class="t-dim">25632ms</span>  <span class="t-dim">484.5KB/12.2KB</span>  <span class="t-dim">100%c</span>  <span class="t-dim">[Tt]</span></div>
+<div class="line">  <span class="t-green">#2</span>  POST /v1/messages  <span class="t-cyan">opus-4-6</span>  133.1k<span class="t-dim">-></span>422  <span class="t-dim">$0.239</span>  <span class="t-dim">13451ms</span>  <span class="t-dim">486.7KB/22.2KB</span>  <span class="t-dim">100%c</span>  <span class="t-dim">[U]</span>  <span class="t-dim">Agent</span></div>
+<div class="line">  <span class="t-green">#3</span>  POST /v1/messages  <span class="t-cyan">haiku-4-5</span>  15.4k<span class="t-dim">-></span>258  <span class="t-dim">$0.016</span>  <span class="t-dim">2018ms</span>  <span class="t-dim">55.4KB/9.3KB</span>  <span class="t-red">0%c</span>  <span class="t-dim">[tUUUU]</span>  <span class="t-dim">Read,Read,Read,Read</span>  <span class="t-cyan t-bold">+agent.1</span></div>
+<div class="line">  <span class="t-green">#4</span>  POST /v1/messages  <span class="t-cyan">opus-4-6</span>  134.5k<span class="t-dim">-></span>211  <span class="t-dim">$0.242</span>  <span class="t-dim">16162ms</span>  <span class="t-dim">491.5KB/11.3KB</span>  <span class="t-dim">99%c</span>  <span class="t-dim">[tU]</span>  <span class="t-dim">Read</span></div>
+<div class="line">  <span class="t-green">#5</span>  POST /v1/messages  <span class="t-cyan">opus-4-6</span>  49.8k<span class="t-dim">-></span>1.1k  <span class="t-dim">$0.653</span>  <span class="t-dim">26245ms</span>  <span class="t-dim">177.6KB/16.6KB</span>  <span class="t-dim">42%c</span>  <span class="t-dim">[TtU]</span>  <span class="t-dim">Read</span>  <span class="t-yellow">compaction</span></div>
+      </div>
+      <ul class="feature-list">
+        <li>Per-request tokens, cost, latency, cache ratio</li>
+        <li>Content block types (T/t/U/S/W/M/m)</li>
+        <li>Sub-agent detection and tracking</li>
+        <li>Compaction event detection</li>
+        <li>Tool names in stop reason</li>
+        <li>Traffic size (bytes sent/received)</li>
+        <li>Multi-port support for multiple projects</li>
+        <li>JSONL logging with API key redaction</li>
+        <li>Raw system prompts and HTTP headers</li>
+        <li>Hidden compaction API calls</li>
+      </ul>
     </div>
   </section>
 
