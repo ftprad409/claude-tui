@@ -31,6 +31,8 @@ MODEL_CONTEXT_WINDOW = {
     "claude-opus-4": 1_000_000,   # 1M context via anthropic-beta flag
 }
 DEFAULT_CONTEXT_LIMIT = 200_000
+# Compaction triggers when remaining capacity drops below this buffer
+COMPACT_BUFFER = 33_000
 
 
 def get_context_limit(model_id):
@@ -695,11 +697,12 @@ def main():
     compact_prediction = ""
     turns_since = metrics["turns_since_compact"]
     if turns_since >= 2 and ratio > 0 and ratio < 1.0:
-        compact_pct = 83
+        # Fixed buffer model: compaction fires when remaining < COMPACT_BUFFER
+        # CLAUDE_AUTOCOMPACT_PCT_OVERRIDE can lower the ceiling further
+        compact_ceiling = context_limit - COMPACT_BUFFER
         env_pct = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
         if env_pct.isdigit() and 1 <= int(env_pct) <= 100:
-            compact_pct = int(env_pct)
-        compact_ceiling = context_limit * compact_pct / 100
+            compact_ceiling = min(compact_ceiling, context_limit * int(env_pct) / 100)
         remaining_tokens = compact_ceiling - ctx_used
 
         # Compute growth rate using EMA on per-turn context deltas

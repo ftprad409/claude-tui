@@ -104,6 +104,8 @@ MODEL_CONTEXT_WINDOW = {
 }
 DEFAULT_CONTEXT_LIMIT = 200_000
 CONTEXT_LIMIT = DEFAULT_CONTEXT_LIMIT  # backward compat for tests
+# Compaction triggers when remaining capacity drops below this buffer
+COMPACT_BUFFER = 33_000
 
 
 def get_context_limit(model_id):

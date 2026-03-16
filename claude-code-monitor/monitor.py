@@ -32,7 +32,7 @@ from pathlib import Path
 from lib import (
     _visible_len, _truncate_ansi, _visual_rows,
     load_settings, get_setting, reset_settings_cache,
-    MODEL_PRICING, CONTEXT_LIMIT, DEFAULT_CONTEXT_LIMIT,
+    MODEL_PRICING, CONTEXT_LIMIT, DEFAULT_CONTEXT_LIMIT, COMPACT_BUFFER,
     RESET, BOLD, DIM, GREEN, YELLOW, ORANGE, RED, CYAN, MAGENTA, WHITE, GRAY,
     CLEAR, HIDE_CURSOR, SHOW_CURSOR, ERASE_LINE, ALT_SCREEN_ON, ALT_SCREEN_OFF,
     LOGO_GREEN, M_DARK, M_MID, M_BRIGHT, PULSE_NEW, PULSE_IDLE,
@@ -174,12 +174,11 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     spark_width = max(20, min(w - 10, 80))
     sparkline = build_sparkline(r["context_history"], spark_width)
 
-    # Compaction prediction (EMA-weighted growth rate)
-    compact_pct = 83
+    # Compaction prediction — fixed buffer model: triggers when remaining < COMPACT_BUFFER
+    compact_ceiling = ctx_limit - COMPACT_BUFFER
     env_pct = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
     if env_pct.isdigit() and 1 <= int(env_pct) <= 100:
-        compact_pct = int(env_pct)
-    compact_ceiling = ctx_limit * compact_pct / 100
+        compact_ceiling = min(compact_ceiling, ctx_limit * int(env_pct) / 100)
     turns_left = "—"
     if r["turns_since_compact"] >= 2 and ratio > 0 and ratio < 1.0:
         remaining = compact_ceiling - ctx_used
@@ -579,9 +578,9 @@ def show_settings_panel(term_width):
         lines.append(f"        {DIM}CLAUDE_AUTOCOMPACT_PCT_OVERRIDE (1-100){RESET}")
         lines.append(f"        {DIM}Saved to ~/.claude/claudeui.env — source it in your shell profile{RESET}")
         lines.append("")
-        lines.append(f"        {RED}⚠{RESET}  {RED}By default Claude compacts at ~83.5% usage (~167k of 200k).{RESET}")
+        lines.append(f"        {RED}⚠{RESET}  {RED}Claude compacts ~33k tokens before the context limit.{RESET}")
         lines.append(f"           {RED}Lower values = compact sooner (more headroom, lose context earlier).{RESET}")
-        lines.append(f"           {RED}Higher values = compact later (keep more context, risk running tight).{RESET}")
+        lines.append(f"           {RED}This env var can only lower the threshold, not raise it.{RESET}")
         lines.append("")
         lines.append(f"  {BOLD}  Display{RESET}")
         lines.append(f"  {'─' * w}")
