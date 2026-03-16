@@ -124,15 +124,19 @@ JSONL file with request/response pairs:
 {"type":"response","id":1,"timestamp":"2026-03-14T10:30:02.456Z","status":200,"latency_ms":2333,"streaming":true,"model":"claude-opus-4-6-20260301","stop_reason":"end_turn","usage":{"input_tokens":45000,"output_tokens":1500,"cache_read_input_tokens":40000},"content_blocks":["thinking","text","tool_use"],"tool_names":["Read"],"event_count":127}
 ```
 
+## Sub-Agent Detection
+
+Claude Code uses the **same session ID** for sub-agents and the main session. The sniffer detects sub-agents by checking the request's tool list: the main session always has the `Agent` tool, sub-agents never do. Sub-agents are grouped by model + system prompt length for labeling (`agent.1`, `agent.2`, etc.).
+
 ## Compaction Detection
 
-The sniffer detects compaction events by comparing consecutive requests within the same session and model. When the message history shrinks dramatically (>50% reduction in message count or >70% reduction in content size), it flags the request:
+The sniffer detects compaction by comparing consecutive **main-session** requests (sub-agents are ignored). When the message history shrinks dramatically (>50% reduction in message count or >70% reduction in body size), it flags the request:
 
 ```
   #12  POST /v1/messages  opus-4-6  12.3k->2.1k  $0.041  3412ms  compaction
 ```
 
-Requests from different models (e.g. Haiku WebSearch calls) or different sessions (sub-agents) are tracked separately to avoid false positives.
+Tracking is per session ID, so a new Claude Code session connecting to a running sniffer won't trigger a false compaction.
 
 ## Security
 

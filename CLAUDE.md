@@ -26,6 +26,9 @@ Real-time status bar for Claude Code. Single-file script.
 - Widget functions: `widget_fn(frame, ratio) -> list[str]` returning 3 rows
 - Compaction entries use `{"type": "system", "subtype": "compact_boundary"}` in transcript JSONL
 - Thinking blocks use `{"type": "thinking"}` in assistant message content (token counts redacted)
+- Context window: auto-detected from model ID (`claude-opus-4` → 1M, others → 200k)
+- Compaction prediction: fixed 33k buffer model (`context_limit - 33_000`), not percentage-based
+- Progress bar colors scale relative to compaction ceiling, not raw percentage
 
 ### claude-code-session-stats
 
@@ -67,6 +70,8 @@ Live session dashboard for a separate terminal.
 - Log viewer: `f` cycles filter (all/errors/bash/edits/search/agents/skills/compactions), `a` toggles live auto-scroll
 - Agent tracking: logs spawns/completions in event log; CURRENT section shows active/total agents per turn
 - Skill tracking: logs skill invocations in event log; CURRENT section shows active skill while running
+- Context window: auto-detected from model in transcript (`claude-opus-4` → 1M, others → 200k); stored as `r["context_limit"]`
+- Compaction prediction: fixed 33k buffer model; progress bar colors scale to compaction ceiling
 
 ### claude-code-sniffer
 
@@ -78,8 +83,8 @@ API call interceptor proxy. Self-contained single-file script.
 - Captures raw request/response bodies, HTTP headers, latency, SSE streaming events
 - Console shows: tokens, cost, latency, traffic size, cache ratio, content block types, tool names, sub-agents
 - Content block types: `T`=thinking, `t`=text, `U`=tool_use, `S`=server_tool_use, `W`=web_search_tool_result, `M`/`m`=mcp
-- Sub-agent tracking: detects new session IDs, labels as `+agent.1` (new) / `agent.1` (known)
-- Compaction detection: per-session, same-model comparison of message history size
+- Sub-agent tracking: detects sub-agents by `Agent` tool presence in request tool list (session IDs are shared); groups by model + system_length for labeling
+- Compaction detection: main-session only (sub-agents ignored), per-session-ID to avoid false positives across sessions; triggers on >50% message count drop or >70% body size drop
 - Logs to `~/.claude/api-sniffer/sniffer-{timestamp}.jsonl`
 - CLI: `claudetui sniffer [--port PORT] [--full] [--no-redact] [--quiet]`
 - Launch helper: `claudetui sniff [--port PORT] [claude args...]` — auto-detects sniffer port, falls back to direct launch
