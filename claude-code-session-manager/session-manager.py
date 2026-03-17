@@ -151,7 +151,17 @@ def quick_parse(transcript_path):
                     meta["slug"] = obj["slug"]
 
                 if obj.get("type") == "user" and not obj.get("isMeta"):
-                    meta["user_messages"] += 1
+                    content = obj.get("message", {}).get("content", "")
+                    has_text = False
+                    if isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                has_text = True
+                                break
+                    elif isinstance(content, str) and content.strip():
+                        has_text = True
+                    if has_text:
+                        meta["user_messages"] += 1
 
                 if (obj.get("type") == "summary" or
                         (obj.get("type") == "system" and obj.get("subtype") == "compact_boundary")):

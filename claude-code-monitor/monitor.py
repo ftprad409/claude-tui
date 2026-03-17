@@ -302,16 +302,17 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     activity_parts.append(f"{GREEN}+{la}{RESET} {DIM}/{RESET} {RED}-{lr}{RESET} {DIM}lines{RESET}")
     lines.append(f"  {DIM}│{RESET}  ".join(activity_parts))
 
-    # Tool breakdown
-    n_reads = sum(r["files_read"].values())
-    n_edits = sum(r["files_edited"].values())
-    n_bash = r["tool_counts"].get("Bash", 0)
-    tool_parts = [f"  {GRAY}{n_reads}{RESET} {DIM}reads{RESET}",
-                  f"{GRAY}{n_edits}{RESET} {DIM}edits{RESET}",
-                  f"{GRAY}{n_bash}{RESET} {DIM}bash{RESET}"]
+    # Tool breakdown (use actual tool counts to match stats)
+    tc = r["tool_counts"]
+    tool_parts = []
+    for name, label in [("Read", "read"), ("Edit", "edit"), ("Grep", "grep"),
+                         ("Bash", "bash"), ("Write", "write"), ("Glob", "glob")]:
+        count = tc.get(name, 0)
+        if count > 0:
+            tool_parts.append(f"{GRAY}{count}{RESET} {DIM}{label}{RESET}")
     if r["subagent_count"] > 0:
         tool_parts.append(f"{GRAY}{r['subagent_count']}{RESET} {DIM}agents{RESET}")
-    lines.append(f"  {DIM}│{RESET}  ".join(tool_parts))
+    lines.append(f"  " + f"  {DIM}│{RESET}  ".join(tool_parts))
 
     lines.append("")
 

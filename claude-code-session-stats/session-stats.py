@@ -174,10 +174,20 @@ def parse_session(transcript_path):
         if not report["git_branch"] and "gitBranch" in obj:
             report["git_branch"] = obj["gitBranch"]
 
-        # User messages (non-meta)
+        # User messages (non-meta, with actual text — not tool results)
         if entry_type == "user" and not obj.get("isMeta"):
-            report["user_messages"] += 1
-            report["turns"] += 1
+            content = obj.get("message", {}).get("content", "")
+            has_text = False
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        has_text = True
+                        break
+            elif isinstance(content, str) and content.strip():
+                has_text = True
+            if has_text:
+                report["user_messages"] += 1
+                report["turns"] += 1
 
         # Assistant messages with usage
         if entry_type == "assistant" and "message" in obj:
