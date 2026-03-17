@@ -547,6 +547,50 @@ class TestParseTranscript(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def test_line_counts_from_edit_and_write(self):
+        """Edit and Write tool_use blocks should accumulate line counts."""
+        entries = [
+            {"type": "user", "message": {"content": "do stuff"}, "timestamp": "2025-01-01T00:00:00Z"},
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": "Edit",
+                            "input": {
+                                "file_path": "/tmp/foo.py",
+                                "old_string": "line1\nline2",
+                                "new_string": "new1\nnew2\nnew3",
+                            },
+                        },
+                        {
+                            "type": "tool_use",
+                            "name": "Write",
+                            "input": {
+                                "file_path": "/tmp/bar.py",
+                                "content": "a\nb\nc\nd",
+                            },
+                        },
+                    ],
+                    "usage": {"input_tokens": 100, "output_tokens": 50},
+                },
+                "timestamp": "2025-01-01T00:00:01Z",
+            },
+        ]
+        path = self._write_jsonl(entries)
+        try:
+            r = parse_transcript(path)
+            # Edit: old has 2 lines, new has 3 lines
+            # Write: 4 lines (new file)
+            self.assertEqual(r["lines_removed"], 2)  # "line1\nline2" = 2 lines
+            self.assertEqual(r["lines_added"], 3 + 4)  # Edit new (3) + Write (4)
+            self.assertEqual(r["files_created"], 1)
+            self.assertEqual(r["files_edited"]["foo.py"], 1)
+            self.assertEqual(r["files_edited"]["bar.py"], 1)
+        finally:
+            os.unlink(path)
+
 
 # ── Context limit constants and model detection ──────────────────
 
@@ -595,6 +639,7 @@ class TestParseTranscriptRequiredKeys(unittest.TestCase):
         "compact_events", "turns_since_compact", "system_prompt_tokens",
         # Tool tracking
         "tool_counts", "tool_error_details", "files_read", "files_edited",
+        "lines_added", "lines_removed", "files_created",
         "recent_tools", "last_error_msg",
         # Current turn state (dashboard CURRENT section)
         "turn_tool_counts", "turn_tool_errors",

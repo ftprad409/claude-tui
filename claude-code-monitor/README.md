@@ -14,11 +14,9 @@ A standalone terminal dashboard that monitors your active Claude Code session in
   ▁▂▃▃▄▅▅▆▆▇▇↓▂▃▃▄▄▅▅▆▆▇↓▁▂▃▃▄▄▅▅▆
   Compactions: 2  │  Turns left: ~31  │  Since compact: 28
 
-  COST
-  $45.20 total  │  ~$0.85/turn  │  $0.34/min  │  $412.50 saved
-  Input: $0.01  │  Cache: $38.40  │  Output: $6.79
-  ██████████████████████████████████████████████████
-  ■input 0%  ■cache 85%  ■output 15%
+  ACTIVITY
+  12 files edited  │  3 new  │  +247 / -89 lines
+  42 reads  │  28 edits  │  6 bash  │  2 agents
 
   CURRENT
   12 tools  │  Edit:5  Read:4  Bash:3
@@ -68,7 +66,7 @@ Run it in a separate terminal while Claude Code is working.
 
 | Key | Action |
 |-----|--------|
-| `s` | Run **session-stats** — full cost breakdown, token sparkline, tool usage |
+| `s` | Run **session-stats** — full breakdown, token sparkline, tool usage |
 | `d` | Run **session-manager show** — detailed session view |
 | `l` | **Event log** — scrollable log with filtering and live auto-scroll |
 | `w` | **Efficiency chart** — token waste per segment, `v` to toggle horizontal/vertical |
@@ -92,7 +90,7 @@ Press any key after viewing a report to return to the live dashboard.
 - **Full log viewer** — `l` opens scrollable log with `f` to filter (all/errors/bash/edits/search/agents/skills/compactions) and `a` for live auto-scroll
 - **Green pulse** — separator flashes bright green when new data arrives
 - **Compaction alert** — `⚡ JUST COMPACTED` highlight after compaction events
-- **Cost burn rate** — `$/min` alongside per-turn average cost
+- **Activity tracking** — files edited, new files created, lines added/removed, tool breakdown
 - **Live tool trace** — last 5 tool calls shown as `read file → edit file → bash python3`
 - **Last error message** — displayed inline with word wrapping
 - **Terminal resize** — adapts bar width, sparkline, and layout to terminal size

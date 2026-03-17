@@ -10,8 +10,8 @@ Hotkeys:
     s  session stats        d  session details
     l  event log            w  efficiency chart
     e  export session       o  project sessions
-    c  settings             ?  help overlay
-    q  quit
+    c  settings             a  API cost (legacy)
+    ?  help overlay          q  quit
 """
 
 import json
@@ -165,9 +165,7 @@ def render_dashboard(r, idle_secs, just_updated, term_width):
 
 
 def _render_header_body(r, idle_secs, just_updated, term_width):
-    """Render static dashboard sections (session, context, cost, current, session totals)."""
-    pricing = get_pricing(r["model"])
-    cost = calc_cost(r["tokens"], pricing)
+    """Render static dashboard sections (session, context, activity, current, session totals)."""
     ctx_limit = r.get("context_limit", DEFAULT_CONTEXT_LIMIT)
     ctx_used = r["last_context"]
     ratio = ctx_used / ctx_limit if ctx_used > 0 else 0
@@ -213,29 +211,9 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
             c = color_ratio(1.0 - tl / 100 if tl < 100 else 0)
             turns_left = f"{c}~{tl}{RESET}"
 
-    # Cache savings
-    cache_without = r["tokens"]["cache_read"] * pricing["input"] / 1_000_000
-    cache_actual = r["tokens"]["cache_read"] * pricing["cache_read"] / 1_000_000
-    saved = cache_without - cache_actual
-
     # Cache ratio
     total_input = r["tokens"]["input"] + r["tokens"]["cache_read"]
     cache_pct = int(r["tokens"]["cache_read"] / total_input * 100) if total_input > 0 else 0
-
-    # Cost per turn
-    cpt = cost["total"] / r["turns"] if r["turns"] > 0 else 0
-
-    # Cost per minute (burn rate)
-    cost_per_min = ""
-    if r["start_time"]:
-        try:
-            start = datetime.fromisoformat(r["start_time"].replace("Z", "+00:00"))
-            elapsed_min = (datetime.now(timezone.utc) - start).total_seconds() / 60
-            if elapsed_min > 1:
-                cpm = cost["total"] / elapsed_min
-                cost_per_min = f"  {DIM}│{RESET}  {ORANGE}${cpm:.2f}/min{RESET}"
-        except Exception:
-            pass
 
     # Activity status
     if idle_secs < 5:
@@ -312,27 +290,28 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
         lines.append(f"  {DIM}Efficiency:{RESET} {eff_color}{eff_pct}%{RESET}  {DIM}│{RESET}  {DIM}Wasted:{RESET} {RED}{wasted_str}{RESET}{DIM}/{RESET}{GRAY}{total_str}{RESET}")
     lines.append("")
 
-    # Cost section
-    lines.append(f"  {BOLD}COST{RESET}")
-    lines.append(f"  {YELLOW}${cost['total']:.2f}{RESET} total  {DIM}│{RESET}  ~{GRAY}${cpt:.2f}/turn{RESET}{cost_per_min}  {DIM}│{RESET}  {GREEN}${saved:.2f} saved{RESET}")
-    lines.append(f"  {DIM}Input:{RESET} ${cost['input']:.2f}  {DIM}│{RESET}  {DIM}Cache read:{RESET} ${cost['cache_read']:.2f}  {DIM}│{RESET}  {DIM}Cache write:{RESET} ${cost['cache_write']:.2f}  {DIM}│{RESET}  {DIM}Output:{RESET} ${cost['output']:.2f}")
+    # Activity section
+    lines.append(f"  {BOLD}ACTIVITY{RESET}")
+    n_edited = len(r["files_edited"])
+    n_created = r["files_created"]
+    la = r["lines_added"]
+    lr = r["lines_removed"]
+    activity_parts = [f"  {CYAN}{n_edited}{RESET} {DIM}files edited{RESET}"]
+    if n_created > 0:
+        activity_parts.append(f"{CYAN}{n_created}{RESET} {DIM}new{RESET}")
+    activity_parts.append(f"{GREEN}+{la}{RESET} {DIM}/{RESET} {RED}-{lr}{RESET} {DIM}lines{RESET}")
+    lines.append(f"  {DIM}│{RESET}  ".join(activity_parts))
 
-    # Token breakdown bar
-    tok_total = r["tokens"]["input"] + r["tokens"]["cache_read"] + r["tokens"]["cache_creation"] + r["tokens"]["output"]
-    if tok_total > 0:
-        tb_width = max(20, min(w - 10, 60))
-        inp_frac = r["tokens"]["input"] / tok_total
-        cache_r_frac = r["tokens"]["cache_read"] / tok_total
-        cache_w_frac = r["tokens"]["cache_creation"] / tok_total
-        out_frac = r["tokens"]["output"] / tok_total
-        inp_w = max(1, int(tb_width * inp_frac)) if inp_frac > 0.005 else 0
-        out_w = max(1, int(tb_width * out_frac)) if out_frac > 0.005 else 0
-        cw_w = max(1, int(tb_width * cache_w_frac)) if cache_w_frac > 0.005 else 0
-        cr_w = tb_width - inp_w - cw_w - out_w
-        tok_bar = f"{CYAN}{'█' * inp_w}{RESET}{GREEN}{'█' * cr_w}{RESET}{MAGENTA}{'█' * cw_w}{RESET}{YELLOW}{'█' * out_w}{RESET}"
-        tok_legend = f"{CYAN}■{RESET}{DIM}input {inp_frac:.0%}{RESET}  {GREEN}■{RESET}{DIM}cache read {cache_r_frac:.0%}{RESET}  {MAGENTA}■{RESET}{DIM}cache write {cache_w_frac:.0%}{RESET}  {YELLOW}■{RESET}{DIM}output {out_frac:.0%}{RESET}"
-        lines.append(f"  {tok_bar}")
-        lines.append(f"  {tok_legend}")
+    # Tool breakdown
+    n_reads = sum(r["files_read"].values())
+    n_edits = sum(r["files_edited"].values())
+    n_bash = r["tool_counts"].get("Bash", 0)
+    tool_parts = [f"  {GRAY}{n_reads}{RESET} {DIM}reads{RESET}",
+                  f"{GRAY}{n_edits}{RESET} {DIM}edits{RESET}",
+                  f"{GRAY}{n_bash}{RESET} {DIM}bash{RESET}"]
+    if r["subagent_count"] > 0:
+        tool_parts.append(f"{GRAY}{r['subagent_count']}{RESET} {DIM}agents{RESET}")
+    lines.append(f"  {DIM}│{RESET}  ".join(tool_parts))
 
     lines.append("")
 
@@ -767,13 +746,14 @@ def render_help_overlay(term_width):
     lines.append(f"  {'─' * w}")
     lines.append("")
     shortcuts = [
-        ("s", "Session stats — full cost breakdown, token sparkline, tool usage"),
+        ("s", "Session stats — full breakdown, token sparkline, tool usage"),
         ("d", "Session details — detailed session view from session-manager"),
         ("l", "Event log — scrollable, f to filter, a for live auto-scroll"),
         ("w", "Efficiency chart — token waste per segment, v to toggle view"),
         ("e", "Export session — save session as markdown"),
         ("o", "List sessions — browse sessions for this project"),
         ("c", "Settings — compaction, sparkline, display config"),
+        ("a", "API cost breakdown (legacy)"),
         ("?", "Toggle this help overlay"),
         ("q", "Quit the monitor"),
     ]
@@ -785,7 +765,7 @@ def render_help_overlay(term_width):
         "Activity indicator: ● ACTIVE / ● WORKING / ○ IDLE",
         "Green pulse on separator when new data arrives",
         "⚡ JUST COMPACTED alert after compaction events",
-        "Cost burn rate ($/min) alongside per-turn cost",
+        "Activity tracking — files edited, lines added/removed",
         "Live tool trace — last 5 tool calls",
         "Last error message displayed inline",
         "Auto-follow — switches to new session when current ends",
@@ -803,6 +783,70 @@ def render_help_overlay(term_width):
     lines.append(f"    Edit {CYAN}~/.claude/claudeui.json{RESET} (hot-reloads):")
     lines.append(f"    {DIM}•{RESET} sparkline.mode      {DIM}—{RESET} \"tail\" (last N) or \"merge\" (combine turns)")
     lines.append(f"    {DIM}•{RESET} sparkline.merge_size {DIM}—{RESET} turns per bar in merge mode (default: 2)")
+    lines.append("")
+    lines.append(f"  {BOLD}{'─' * w}{RESET}")
+    lines.append(f"  {DIM}Press any key to close{RESET}")
+    return lines
+
+
+def render_cost_overlay(r, term_width):
+    """Render legacy cost overlay (API billing details)."""
+    w = min(term_width - 4, 60)
+    pricing = get_pricing(r["model"])
+    cost = calc_cost(r["tokens"], pricing)
+
+    # Cache savings
+    cache_without = r["tokens"]["cache_read"] * pricing["input"] / 1_000_000
+    cache_actual = r["tokens"]["cache_read"] * pricing["cache_read"] / 1_000_000
+    saved = cache_without - cache_actual
+
+    # Cost per turn
+    cpt = cost["total"] / r["turns"] if r["turns"] > 0 else 0
+
+    # Cost per minute
+    cost_per_min = ""
+    if r["start_time"]:
+        try:
+            start = datetime.fromisoformat(r["start_time"].replace("Z", "+00:00"))
+            elapsed_min = (datetime.now(timezone.utc) - start).total_seconds() / 60
+            if elapsed_min > 1:
+                cpm = cost["total"] / elapsed_min
+                cost_per_min = f"  {DIM}│{RESET}  {ORANGE}${cpm:.2f}/min{RESET}"
+        except Exception:
+            pass
+
+    # Token breakdown
+    tok_total = r["tokens"]["input"] + r["tokens"]["cache_read"] + r["tokens"]["cache_creation"] + r["tokens"]["output"]
+
+    lines = []
+    lines.append("")
+    lines.append(f"  {BOLD}{'─' * w}{RESET}")
+    lines.append(f"  {BOLD}  COST (API billing){RESET}")
+    lines.append(f"  {'─' * w}")
+    lines.append("")
+    lines.append(f"    {YELLOW}${cost['total']:.2f}{RESET} total  {DIM}│{RESET}  ~{GRAY}${cpt:.2f}/turn{RESET}{cost_per_min}  {DIM}│{RESET}  {GREEN}${saved:.2f} saved{RESET}")
+    lines.append("")
+    lines.append(f"    {DIM}Input:{RESET}       ${cost['input']:.2f}")
+    lines.append(f"    {DIM}Cache read:{RESET}  ${cost['cache_read']:.2f}")
+    lines.append(f"    {DIM}Cache write:{RESET} ${cost['cache_write']:.2f}")
+    lines.append(f"    {DIM}Output:{RESET}      ${cost['output']:.2f}")
+
+    if tok_total > 0:
+        lines.append("")
+        tb_width = max(20, min(w - 6, 50))
+        inp_frac = r["tokens"]["input"] / tok_total
+        cache_r_frac = r["tokens"]["cache_read"] / tok_total
+        cache_w_frac = r["tokens"]["cache_creation"] / tok_total
+        out_frac = r["tokens"]["output"] / tok_total
+        inp_w = max(1, int(tb_width * inp_frac)) if inp_frac > 0.005 else 0
+        out_w = max(1, int(tb_width * out_frac)) if out_frac > 0.005 else 0
+        cw_w = max(1, int(tb_width * cache_w_frac)) if cache_w_frac > 0.005 else 0
+        cr_w = tb_width - inp_w - cw_w - out_w
+        tok_bar = f"{CYAN}{'█' * inp_w}{RESET}{GREEN}{'█' * cr_w}{RESET}{MAGENTA}{'█' * cw_w}{RESET}{YELLOW}{'█' * out_w}{RESET}"
+        tok_legend = f"{CYAN}■{RESET}{DIM}input {inp_frac:.0%}{RESET}  {GREEN}■{RESET}{DIM}cache {cache_r_frac:.0%}{RESET}  {MAGENTA}■{RESET}{DIM}write {cache_w_frac:.0%}{RESET}  {YELLOW}■{RESET}{DIM}output {out_frac:.0%}{RESET}"
+        lines.append(f"    {tok_bar}")
+        lines.append(f"    {tok_legend}")
+
     lines.append("")
     lines.append(f"  {BOLD}{'─' * w}{RESET}")
     lines.append(f"  {DIM}Press any key to close{RESET}")
@@ -1043,7 +1087,7 @@ def list_sessions():
 
 # ── Input handling ──────────────────────────────────────────────────
 
-VALID_KEYS = frozenset("qQsSdDlLwWeEoOcC?")
+VALID_KEYS = frozenset("qQsSdDlLwWeEoOcCaA?")
 
 
 def get_key():
@@ -1339,6 +1383,19 @@ def main():
                         needs_full_redraw = True
                         cached_header = cached_log = None
                         continue
+                    elif key in ("a", "A"):
+                        if r is not None:
+                            cost_lines = render_cost_overlay(r, term_width)
+                            out.write(CLEAR + "\n".join(cost_lines))
+                            out.flush()
+                            while running:
+                                if select.select([sys.stdin], [], [], 0.05)[0]:
+                                    os.read(sys.stdin.fileno(), 1)
+                                    while select.select([sys.stdin], [], [], 0.01)[0]:
+                                        os.read(sys.stdin.fileno(), 1)
+                                    break
+                            needs_full_redraw = True
+                            continue
 
                 # Re-parse transcript only when file changes
                 try:

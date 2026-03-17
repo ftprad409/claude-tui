@@ -212,6 +212,7 @@ def parse_transcript(path):
         "context_history": [], "per_response": [], "context_per_turn": {},
         "tool_counts": Counter(), "tool_errors": 0, "tool_error_details": [],
         "files_read": Counter(), "files_edited": Counter(),
+        "lines_added": 0, "lines_removed": 0, "files_created": 0,
         "thinking_count": 0, "subagent_count": 0, "skill_count": 0, "turns_since_compact": 0,
         "recent_tools": [],  # last N tool calls for live trace
         "last_error_msg": "",
@@ -409,6 +410,25 @@ def parse_transcript(path):
                                 if name in ("Edit", "Write", "MultiEdit"):
                                     r["files_edited"][fname] += 1
                                     r["turn_files_edited"][fname] += 1
+                                    # Count lines added/removed
+                                    if name == "Edit":
+                                        old = inp.get("old_string", "")
+                                        new = inp.get("new_string", "")
+                                        if old or new:
+                                            r["lines_removed"] += old.count("\n") + 1
+                                            r["lines_added"] += new.count("\n") + 1
+                                    elif name == "Write":
+                                        content = inp.get("content", "")
+                                        if content:
+                                            r["files_created"] += 1
+                                            r["lines_added"] += content.count("\n") + 1
+                                    elif name == "MultiEdit":
+                                        for edit in inp.get("edits", []):
+                                            old = edit.get("old_string", "")
+                                            new = edit.get("new_string", "")
+                                            if old or new:
+                                                r["lines_removed"] += old.count("\n") + 1
+                                                r["lines_added"] += new.count("\n") + 1
                                 else:
                                     r["files_read"][fname] += 1
                                     r["turn_files_read"][fname] += 1
