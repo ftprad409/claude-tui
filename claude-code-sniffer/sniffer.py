@@ -45,6 +45,16 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 CYAN = "\033[96m"
 GRAY = "\033[90m"
+LOGO_GREEN = "\033[38;5;46m"
+
+LOGO_LINES = [
+    (f" {BOLD} ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗", f"{LOGO_GREEN}████████╗██╗   ██╗██╗{RESET}"),
+    (f" {BOLD}██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝", f"{LOGO_GREEN}╚══██╔══╝██║   ██║██║{RESET}"),
+    (f" {BOLD}██║      ██║     ███████║██║   ██║██║  ██║█████╗  ", f"{LOGO_GREEN}   ██║   ██║   ██║██║{RESET}"),
+    (f" {BOLD}██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  ", f"{LOGO_GREEN}   ██║   ██║   ██║██║{RESET}"),
+    (f" {BOLD}╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗", f"{LOGO_GREEN}   ██║   ╚██████╔╝██║{RESET}"),
+    (f" {BOLD} ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝", f"{LOGO_GREEN}   ╚═╝    ╚═════╝ ╚═╝{RESET}"),
+]
 
 # Pricing (per 1M tokens)
 MODEL_PRICING = {
@@ -546,6 +556,7 @@ class SnifferServer(http.server.ThreadingHTTPServer):
         self._total_out = 0
         self._total_req_bytes = 0
         self._total_resp_bytes = 0
+        self._tool_counts = {}  # tool_name -> count
 
         # Open log file with restricted permissions
         fd = os.open(str(log_path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
@@ -626,6 +637,8 @@ class SnifferServer(http.server.ThreadingHTTPServer):
             self._total_out += total_out
             self._total_req_bytes += req_bytes
             self._total_resp_bytes += resp_bytes
+            for tn in (tool_names or []):
+                self._tool_counts[tn] = self._tool_counts.get(tn, 0) + 1
 
             if error:
                 print(f"  {RED}#{req_id:<3}{RESET} {method} {path}  "
@@ -663,6 +676,11 @@ class SnifferServer(http.server.ThreadingHTTPServer):
                   f"{DIM}|{RESET}  {_format_bytes(self._total_req_bytes)} sent  "
                   f"{DIM}|{RESET}  {_format_bytes(self._total_resp_bytes)} recv"
                   f"{agent_str}")
+            # Activity: tool breakdown
+            if self._tool_counts:
+                top = sorted(self._tool_counts.items(), key=lambda x: -x[1])
+                parts = [f"{name}:{count}" for name, count in top]
+                print(f"  {BOLD}Activity:{RESET} {DIM}{'  '.join(parts)}{RESET}")
             print(f"  {DIM}Log: {self.log_path}{RESET}")
             print()
 
@@ -719,7 +737,10 @@ def main():
 
     if not args.quiet:
         print()
-        print(f"  {BOLD}ClaudeTUI API Sniffer{RESET} {DIM}— listening on "
+        for claude_part, tui_part in LOGO_LINES:
+            print(claude_part + tui_part)
+        print()
+        print(f"  {BOLD}API Sniffer{RESET} {DIM}— listening on "
               f"http://127.0.0.1:{args.port}{RESET}")
         print()
         print(f"  {BOLD}Use:{RESET}  "
