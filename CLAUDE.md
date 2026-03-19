@@ -26,7 +26,7 @@ Real-time status bar for Claude Code. Single-file script.
 - Pluggable widget system (3x7 grid): `matrix`, `hex`, `bars`, `progress`, `none`
 - Context window: auto-detected from model ID (`claude-opus-4` → 1M, others → 200k)
 - Compaction prediction: fixed 33k buffer model (`context_limit - COMPACT_BUFFER`), not percentage-based
-- Progress bar colors scale relative to compaction ceiling, not raw percentage
+- Progress bar: smooth true-color RGB gradient (`_lerp_rgb`) across 5 color stops (green→teal→yellow→peach→pink); percentage color scales relative to compaction ceiling
 
 ### claude-code-session-stats
 
@@ -160,7 +160,7 @@ python3 claudetui.py --help          # test dispatcher
 
 ## Gotchas
 
-- **Duplicated constants**: `MODEL_PRICING`, `MODEL_CONTEXT_WINDOW`, `COMPACT_BUFFER`, and `get_context_limit()` exist in 3 places: `statusline.py`, `monitor/lib.py`, and `commands/tui/lib.py`. The statusline is self-contained (no imports from monitor); commands are standalone too. Keep all three in sync when updating pricing or adding models.
+- **Duplicated constants**: `MODEL_PRICING` exists in 5 places: `statusline.py`, `monitor/lib.py`, `commands/tui/lib.py`, `session-stats.py`, and `session-manager.py`. The sniffer (`sniffer.py`) has a 6th copy using abbreviated model family keys. `MODEL_CONTEXT_WINDOW`, `COMPACT_BUFFER`, and `get_context_limit()` exist in 3 places: `statusline.py`, `monitor/lib.py`, and `commands/tui/lib.py`. All pricing dicts include `cache_write` (1.25x input). Keep all in sync when updating pricing or adding models.
 - **Duplicated fetcher**: `_fetch_api_status()` and `_format_api_status()` exist in both `statusline.py` and `monitor.py`. Keep in sync when changing status page logic.
 - **Transcript format**: Compaction entries use `{"type": "system", "subtype": "compact_boundary"}`. Thinking blocks use `{"type": "thinking"}` in assistant message content (token counts redacted by the API).
 - **Widget API**: Widget functions have signature `widget_fn(frame, ratio) -> list[str]` returning exactly 3 rows.

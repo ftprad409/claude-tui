@@ -9,7 +9,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue?logo=python&logoColor=white)]()
 [![Shell](https://img.shields.io/badge/shell-bash%20%7C%20zsh-black?logo=gnubash&logoColor=white)]()
 
-Real-time dashboard, statusline, and analytics for Claude Code sessions.
+Real-time dashboard, statusline, API interceptor, and analytics for Claude Code sessions. Includes live service health monitoring from status.claude.com.
 
 **Website:** [slima4.github.io/claude-tui](https://slima4.github.io/claude-tui/)
 
@@ -127,6 +127,9 @@ Customize behavior via `~/.claude/claudeui.json` (hot-reloads, no restart needed
 | `sparkline.mode` | `"tail"`, `"merge"` | `"tail"` | `tail` shows last N turns; `merge` combines turns into buckets |
 | `sparkline.merge_size` | number | `2` | Turns per bar in merge mode |
 | `monitor.log_lines` | `0`–`50` | `8` | Number of log entries on monitor main screen (`0` = off) |
+| `status.enabled` | `true`, `false` | `true` | Enable/disable Claude status page monitoring |
+| `status.ttl` | number (30–3600) | `120` | Cache time-to-live in seconds for status page polling |
+| `status.show_when_operational` | `true`, `false` | `false` | Show indicator even when all systems are operational |
 
 ## Tools
 
@@ -233,7 +236,7 @@ Live session dashboard for a separate terminal. Live duration, activity status, 
 python3 claude-code-monitor/monitor.py           # auto-detect active session
 python3 claude-code-monitor/monitor.py --list     # list recent sessions
 claudetui chart                                   # context efficiency chart (standalone)
-# While running: stats  details  log  chart  export  sessions  config  ?help  quit
+# While running: stats  details  log  chart  export  sessions  config  info  ?help  quit
 ```
 
 ### [claude-code-sniffer](./claude-code-sniffer/)
