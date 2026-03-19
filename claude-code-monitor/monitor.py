@@ -853,8 +853,10 @@ def _save_env_override(var_name, value):
                     lines.append(line)
     if not found:
         lines.append(f"export {var_name}={value}\n")
-    with open(path, "w") as f:
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
         f.writelines(lines)
+    os.replace(tmp, path)
     # Also set in current process for display
     os.environ[var_name] = value
 
@@ -1617,11 +1619,11 @@ def main():
 
                 if mtime != last_mtime or cached_header is None:
                     last_mtime = mtime
-                    last_data_time = now
                     update_flash_until = now + 0.5  # pulse for 500ms
                     try:
                         r = parse_transcript(path)
-                        idle_secs = now - last_data_time
+                        idle_secs = 0  # fresh data = active
+                        last_data_time = now
                         cached_header, cached_log = render_dashboard(r, idle_secs, True, term_width)
                         needs_full_redraw = True
                     except Exception as e:

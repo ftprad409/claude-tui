@@ -6,7 +6,7 @@ allowed-tools: Bash
 Run the session report script and present the output to the user. Do not add commentary — just show the report.
 
 ```bash
-python3 "$(dirname "$(readlink -f ~/.claude/commands/tui/session.md)" 2>/dev/null || echo "SCRIPT_DIR")/session_report.py"
+python3 "$(python3 -c "import os; print(os.path.dirname(os.path.realpath(os.path.expanduser('~/.claude/commands/tui/session.md'))))")/session_report.py"
 ```
 
 If the above path fails, try:

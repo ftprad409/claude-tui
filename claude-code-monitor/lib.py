@@ -418,10 +418,10 @@ def parse_transcript(path):
                                             r["lines_removed"] += old.count("\n") + 1
                                             r["lines_added"] += new.count("\n") + 1
                                     elif name == "Write":
-                                        content = inp.get("content", "")
-                                        if content:
+                                        write_content = inp.get("content", "")
+                                        if write_content:
                                             r["files_created"] += 1
-                                            r["lines_added"] += content.count("\n") + 1
+                                            r["lines_added"] += write_content.count("\n") + 1
                                     elif name == "MultiEdit":
                                         for edit in inp.get("edits", []):
                                             old = edit.get("old_string", "")

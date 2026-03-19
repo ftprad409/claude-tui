@@ -375,6 +375,7 @@ class SnifferHandler(http.server.BaseHTTPRequestHandler):
                 if lk not in ("host", "transfer-encoding", "accept-encoding"):
                     fwd_headers[key] = val
             fwd_headers["Host"] = UPSTREAM_HOST
+            fwd_headers["Accept-Encoding"] = "identity"
 
             conn.request(self.command, self.path, body=body, headers=fwd_headers)
             resp = conn.getresponse()
@@ -733,7 +734,9 @@ def main():
 
     # Write port file so other tools can discover the sniffer
     port_file = PORT_DIR / f".port.{args.port}"
-    port_file.write_text(str(args.port))
+    fd = os.open(str(port_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(str(args.port))
 
     if not args.quiet:
         print()
@@ -751,14 +754,17 @@ def main():
             print(f"  {YELLOW}Full body logging enabled — log files may be large{RESET}")
             print()
 
-    # Handle Ctrl+C gracefully
+    # Handle Ctrl+C gracefully — run cleanup in a thread to avoid
+    # deadlocking on threading locks held during request processing
     def shutdown(sig, frame):
-        if not args.quiet:
-            print(f"\n  {DIM}Shutting down...{RESET}")
-        port_file.unlink(missing_ok=True)
-        server.print_summary()
-        server.close()
-        os._exit(0)
+        def _do_shutdown():
+            if not args.quiet:
+                print(f"\n  {DIM}Shutting down...{RESET}")
+            port_file.unlink(missing_ok=True)
+            server.print_summary()
+            server.close()
+            os._exit(0)
+        threading.Thread(target=_do_shutdown, daemon=True).start()
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)

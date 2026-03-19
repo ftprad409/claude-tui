@@ -985,7 +985,7 @@ def main():
             f"{CYAN}{metrics['subagent_count']}{RESET} {dim}agents{RESET}"
         )
 
-    if api_status_str:
+    if api_status_str and is_visible("line2", "api_status"):
         line2_parts.append(api_status_str)
 
     # Line 3+: live activity trace (wraps to extra lines if needed)

@@ -41,7 +41,7 @@ BOLD = "\033[1m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 ORANGE = "\033[38;5;208m"
-RED = "\033[91m"
+RED = "\033[31m"
 CYAN = "\033[96m"
 MAGENTA = "\033[95m"
 WHITE = "\033[97m"
@@ -49,11 +49,11 @@ GRAY = "\033[90m"
 DIM = "\033[2m"
 
 MODEL_PRICING = {
-    "claude-opus-4-6": {"input": 15.0, "cache_read": 1.5, "output": 75.0},
-    "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "output": 15.0},
-    "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "output": 4.0},
-    "claude-sonnet-3-5": {"input": 3.0, "cache_read": 0.30, "output": 15.0},
-    "claude-haiku-3-5": {"input": 0.80, "cache_read": 0.08, "output": 4.0},
+    "claude-opus-4-6": {"input": 15.0, "cache_read": 1.5, "cache_write": 18.75, "output": 75.0},
+    "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
+    "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
+    "claude-sonnet-3-5": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
+    "claude-haiku-3-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
 }
 
 
@@ -117,6 +117,7 @@ def quick_parse(transcript_path):
 
     input_total = 0
     cache_read_total = 0
+    cache_creation_total = 0
     output_total = 0
 
     try:
@@ -175,6 +176,7 @@ def quick_parse(transcript_path):
                     usage = obj["message"]["usage"]
                     input_total += usage.get("input_tokens", 0)
                     cache_read_total += usage.get("cache_read_input_tokens", 0)
+                    cache_creation_total += usage.get("cache_creation_input_tokens", 0)
                     output_total += usage.get("output_tokens", 0)
 
     except (FileNotFoundError, PermissionError):
@@ -190,6 +192,7 @@ def quick_parse(transcript_path):
     meta["cost_estimate"] = (
         input_total * pricing["input"] / 1_000_000
         + cache_read_total * pricing["cache_read"] / 1_000_000
+        + cache_creation_total * pricing.get("cache_write", pricing["input"] * 1.25) / 1_000_000
         + output_total * pricing["output"] / 1_000_000
     )
 
@@ -197,19 +200,26 @@ def quick_parse(transcript_path):
 
 
 def find_session_by_id(session_id):
-    """Find a specific session by ID prefix."""
+    """Find a specific session by ID prefix. Warns on ambiguous matches."""
     projects_dir = get_projects_dir()
     if not projects_dir.exists():
         return None
 
+    matches = []
     for project_dir in projects_dir.iterdir():
         if not project_dir.is_dir():
             continue
         for jsonl_file in project_dir.glob("*.jsonl"):
             if jsonl_file.stem.startswith(session_id):
-                return jsonl_file
+                matches.append(jsonl_file)
 
-    return None
+    if not matches:
+        return None
+    if len(matches) > 1:
+        matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        print(f"  {YELLOW}Ambiguous prefix '{session_id}' matches "
+              f"{len(matches)} sessions — using most recent{RESET}")
+    return matches[0]
 
 
 def format_time(ts):

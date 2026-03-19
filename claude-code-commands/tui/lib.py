@@ -8,9 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 MODEL_PRICING = {
-    "claude-opus-4-6": {"input": 15.0, "cache_read": 1.5, "output": 75.0},
-    "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "output": 15.0},
-    "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "output": 4.0},
+    "claude-opus-4-6": {"input": 15.0, "cache_read": 1.5, "cache_write": 18.75, "output": 75.0},
+    "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
+    "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
+    "claude-sonnet-3-5": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
+    "claude-haiku-3-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
 }
 # Context window sizes by model family
 MODEL_CONTEXT_WINDOW = {
@@ -230,13 +232,15 @@ def get_pricing(model):
 def calc_cost(tokens, pricing):
     """Calculate costs from token counts and pricing."""
     c_input = tokens["input"] * pricing["input"] / 1_000_000
-    c_cache = tokens["cache_read"] * pricing["cache_read"] / 1_000_000
+    c_cache_read = tokens["cache_read"] * pricing["cache_read"] / 1_000_000
+    c_cache_write = tokens.get("cache_creation", 0) * pricing.get("cache_write", pricing["input"] * 1.25) / 1_000_000
     c_output = tokens["output"] * pricing["output"] / 1_000_000
     return {
         "input": c_input,
-        "cache_read": c_cache,
+        "cache_read": c_cache_read,
+        "cache_write": c_cache_write,
         "output": c_output,
-        "total": c_input + c_cache + c_output,
+        "total": c_input + c_cache_read + c_cache_write + c_output,
     }
 
 

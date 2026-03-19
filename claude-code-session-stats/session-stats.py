@@ -34,11 +34,11 @@ from pathlib import Path
 
 # Pricing per million tokens
 MODEL_PRICING = {
-    "claude-opus-4-6": {"input": 15.0, "cache_read": 1.5, "output": 75.0},
-    "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "output": 15.0},
-    "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "output": 4.0},
-    "claude-sonnet-3-5": {"input": 3.0, "cache_read": 0.30, "output": 15.0},
-    "claude-haiku-3-5": {"input": 0.80, "cache_read": 0.08, "output": 4.0},
+    "claude-opus-4-6": {"input": 15.0, "cache_read": 1.5, "cache_write": 18.75, "output": 75.0},
+    "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
+    "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
+    "claude-sonnet-3-5": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
+    "claude-haiku-3-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
 }
 
 # ANSI
@@ -47,7 +47,7 @@ BOLD = "\033[1m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 ORANGE = "\033[38;5;208m"
-RED = "\033[91m"
+RED = "\033[31m"
 CYAN = "\033[96m"
 MAGENTA = "\033[95m"
 WHITE = "\033[97m"
@@ -294,12 +294,17 @@ def parse_session(transcript_path):
     report["cost"]["cache_read"] = (
         report["tokens"]["cache_read_total"] * pricing["cache_read"] / 1_000_000
     )
+    report["cost"]["cache_write"] = (
+        report["tokens"]["cache_creation_total"]
+        * pricing.get("cache_write", pricing["input"] * 1.25) / 1_000_000
+    )
     report["cost"]["output"] = (
         report["tokens"]["output_total"] * pricing["output"] / 1_000_000
     )
     report["cost"]["total"] = sum([
         report["cost"]["input"],
         report["cost"]["cache_read"],
+        report["cost"]["cache_write"],
         report["cost"]["output"],
     ])
 

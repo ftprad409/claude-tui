@@ -6,7 +6,7 @@ allowed-tools: Bash
 Run the cost report script and present the output to the user. Do not add commentary — just show the report.
 
 ```bash
-python3 "$(dirname "$(readlink -f ~/.claude/commands/tui/cost.md)" 2>/dev/null || echo "SCRIPT_DIR")/cost_report.py"
+python3 "$(python3 -c "import os; print(os.path.dirname(os.path.realpath(os.path.expanduser('~/.claude/commands/tui/cost.md'))))")/cost_report.py"
 ```
 
 If the above path fails, try:
