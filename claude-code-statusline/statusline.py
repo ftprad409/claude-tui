@@ -566,50 +566,87 @@ def build_sparkline(values, width=20):
     chars = []
     for v in values:
         if v is None:
-            chars.append(f"{MAGENTA}↓{RESET}")
+            chars.append(f"\033[38;2;243;139;168m\u2595{RESET}")
             continue
         r = v / scale
         idx = int(r * (len(blocks) - 1))
         idx = max(0, min(idx, len(blocks) - 1))
         if r < 0.25:
-            color = GREEN
+            color = "\033[38;2;166;227;161m"   # green
         elif r < 0.50:
-            color = CYAN
+            color = "\033[38;2;148;226;213m"   # teal
         elif r < 0.75:
-            color = YELLOW
+            color = "\033[38;2;249;226;175m"   # yellow
         else:
-            color = ORANGE
+            color = "\033[38;2;250;179;135m"   # peach
         chars.append(f"{color}{blocks[idx]}{RESET}")
     return "".join(chars)
 
 
 
-def build_progress_bar(ratio, length=20, compact_ratio=None):
-    """Build a colored progress bar string.
+def _rgb(r, g, b):
+    """Return an ANSI true-color foreground escape."""
+    return f"\033[38;2;{r};{g};{b}m"
 
-    Colors are based on proximity to compaction, not raw percentage.
-    compact_ratio is the ratio at which compaction triggers (e.g. 0.967 for 1M).
+
+def _lerp_rgb(stops, t):
+    """Interpolate smoothly across a list of (pos, r, g, b) color stops."""
+    t = max(0.0, min(1.0, t))
+    for i in range(len(stops) - 1):
+        if t <= stops[i + 1][0]:
+            seg_t = (t - stops[i][0]) / (stops[i + 1][0] - stops[i][0])
+            r = int(stops[i][1] + (stops[i + 1][1] - stops[i][1]) * seg_t)
+            g = int(stops[i][2] + (stops[i + 1][2] - stops[i][2]) * seg_t)
+            b = int(stops[i][3] + (stops[i + 1][3] - stops[i][3]) * seg_t)
+            return _rgb(r, g, b)
+    return _rgb(stops[-1][1], stops[-1][2], stops[-1][3])
+
+
+def build_progress_bar(ratio, length=20, compact_ratio=None):
+    """Build a smooth gradient progress bar.
+
+    Each filled character gets a unique interpolated color across the
+    gradient, creating a continuous green -> teal -> yellow -> peach -> pink
+    transition. Empty slots use a dim block for contrast.
     """
     filled = int(length * min(ratio, 1.0))
-    bar = "█" * filled + "░" * (length - filled)
+
+    # Smooth gradient stops: (position, R, G, B)
+    stops = [
+        (0.00, 166, 227, 161),   # green
+        (0.30, 148, 226, 213),   # teal
+        (0.55, 249, 226, 175),   # yellow
+        (0.80, 250, 179, 135),   # peach
+        (1.00, 243, 139, 168),   # pink
+    ]
+
+    bar_chars = []
+    for i in range(length):
+        if i < filled:
+            pos = i / max(length - 1, 1)
+            color = _lerp_rgb(stops, pos)
+            bar_chars.append(f"{color}\u2588{RESET}")
+        else:
+            bar_chars.append(f"\033[38;2;55;59;80m\u2591{RESET}")
+
+    bar = "".join(bar_chars)
 
     if compact_ratio and compact_ratio > 0:
-        # Color by how full we are relative to compaction ceiling
         fill_of_ceiling = ratio / compact_ratio
     else:
         fill_of_ceiling = ratio
 
     if fill_of_ceiling < 0.60:
-        color = GREEN
+        pct_color = GREEN
     elif fill_of_ceiling < 0.85:
-        color = YELLOW
+        pct_color = YELLOW
     elif fill_of_ceiling < 0.95:
-        color = ORANGE
+        pct_color = ORANGE
     else:
-        color = RED
+        pct_color = RED
 
     pct = ratio * 100
-    return f"{color}{bar}{RESET} {color}{pct:.0f}%{RESET}"
+    return f"{bar} {pct_color}{pct:.0f}%{RESET}"
 
 
 def main():
@@ -659,7 +696,7 @@ def main():
     diff_stat = get_git_diff_stat()
     branch_part = ""
     if branch:
-        branch_part = f"{GREEN}{branch}{RESET}"
+        branch_part = f"{GREEN}\u2387 {branch}{RESET}"
         if diff_stat:
             branch_part += f" {diff_stat}"
 
@@ -680,25 +717,14 @@ def main():
     else:
         cache_part = f"{GRAY}0%{RESET} cache"
 
-    # Error rate
-    if metrics["tool_errors"] > 0:
-        err_color = RED if metrics["tool_errors"] > 5 else ORANGE
-        error_part = f"{err_color}{metrics['tool_errors']}{RESET} err"
-    else:
-        error_part = f"{GREEN}0{RESET} err"
-
-    # Sub-agents
-    subagent_part = ""
-    if metrics["subagent_count"] > 0:
-        subagent_part = f"{CYAN}{metrics['subagent_count']}{RESET} agents"
+    # Sub-agents (used as guard for line2 visibility)
+    has_subagents = metrics["subagent_count"] > 0
 
     # Cost per turn
     cost_per_turn = ""
     if metrics["turn_count"] > 0:
         cpt = cost / metrics["turn_count"]
         cost_per_turn = f"{GRAY}~{format_cost(cpt)}/turn{RESET}"
-
-    sep = f" {GRAY}|{RESET} "
 
     # Per-turn token spend sparkline (relative to peak)
     sparkline_part = build_sparkline(metrics["context_history"])
@@ -768,7 +794,7 @@ def main():
         efficiency_part = f"{eff_color}{eff_pct}%{RESET} {GRAY}eff{RESET}"
 
     dim = GRAY
-    sep = f" {dim}│{RESET} "
+    sep = f" {dim}\u22ee{RESET} "
 
     # Line 1: session core
     line1_parts = []
@@ -779,12 +805,12 @@ def main():
         if is_visible("line1", "token_count"):
             ctx_part += f" {CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
         if compact_prediction and is_visible("line1", "compact_prediction"):
-            ctx_part += f" {dim}│{RESET} {compact_prediction}"
+            ctx_part += f" {dim}\u22ee{RESET} {compact_prediction}"
         line1_parts.append(ctx_part)
     elif is_visible("line1", "token_count"):
         ctx_part = f"{CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
         if compact_prediction and is_visible("line1", "compact_prediction"):
-            ctx_part += f" {dim}│{RESET} {compact_prediction}"
+            ctx_part += f" {dim}\u22ee{RESET} {compact_prediction}"
         line1_parts.append(ctx_part)
     elif compact_prediction and is_visible("line1", "compact_prediction"):
         line1_parts.append(compact_prediction)
@@ -796,7 +822,7 @@ def main():
         line1_parts.append(f"{WHITE}{duration_str}{RESET}")
     if is_visible("line1", "compact_count"):
         line1_parts.append(
-            f"{CYAN}{metrics['compact_count']}{RESET}{dim}x{RESET}compact"
+            f"{CYAN}{metrics['compact_count']}{RESET}{dim}x{RESET} compact"
         )
     if efficiency_part:
         line1_parts.append(efficiency_part)
@@ -818,7 +844,11 @@ def main():
             f"{CYAN}{len(metrics['files_touched'])}{RESET} {dim}files{RESET}"
         )
     if is_visible("line2", "errors"):
-        line2_parts.append(f"{error_part.split(' ')[0]} {dim}err{RESET}")
+        if metrics["tool_errors"] > 0:
+            err_color = RED if metrics["tool_errors"] > 5 else ORANGE
+            line2_parts.append(f"{err_color}{metrics['tool_errors']}{RESET} {dim}err{RESET}")
+        else:
+            line2_parts.append(f"{GREEN}0{RESET} {dim}err{RESET}")
     if is_visible("line2", "cache"):
         line2_parts.append(f"{cache_part.split(' ')[0]} {dim}cache{RESET}")
     if metrics["thinking_count"] > 0 and is_visible("line2", "thinking"):
@@ -827,7 +857,7 @@ def main():
         )
     if cost_per_turn and is_visible("line2", "cost_per_turn"):
         line2_parts.append(cost_per_turn)
-    if subagent_part and is_visible("line2", "agents"):
+    if has_subagents and is_visible("line2", "agents"):
         line2_parts.append(
             f"{CYAN}{metrics['subagent_count']}{RESET} {dim}agents{RESET}"
         )
@@ -858,7 +888,7 @@ def main():
     widget_offset = 10  # widget (7) + padding (3)
     max_width = term_cols_padded - widget_offset
     arrow = f" {dim}\u2192{RESET} "
-    arrow_vis = 4  # " → " visible width
+    arrow_vis = 3  # " → " visible width
 
     if trail_items or file_edit_parts:
         cur_line_parts = []
@@ -917,10 +947,11 @@ def main():
             )
         if is_visible("line1", "compact_count"):
             compact_parts.append(
-                f"{CYAN}{metrics['compact_count']}{RESET}{dim}x{RESET}compact"
+                f"{CYAN}{metrics['compact_count']}{RESET}{dim}x{RESET} compact"
             )
         if metrics["tool_errors"] > 0 and is_visible("line2", "errors"):
-            compact_parts.append(error_part)
+            err_color = RED if metrics["tool_errors"] > 5 else ORANGE
+            compact_parts.append(f"{err_color}{metrics['tool_errors']}{RESET} {dim}err{RESET}")
         if efficiency_part:
             compact_parts.append(efficiency_part)
         if compact_parts:
@@ -944,7 +975,7 @@ def main():
         first_extra = line3_lines[0] if line3_lines else ""
         print(_truncate(f" {wdg[2]}{first_extra}", term_cols_padded))
         for extra_line in line3_lines[1:]:
-            print(_truncate(f"         {extra_line}", term_cols_padded))
+            print(_truncate(f"        {extra_line}", term_cols_padded))
     else:
         if line1_str:
             print(_truncate(f"{line1_str}", term_cols_padded))
