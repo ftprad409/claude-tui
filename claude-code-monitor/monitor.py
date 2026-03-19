@@ -11,7 +11,8 @@ Hotkeys:
     l  event log            w  efficiency chart
     e  export session       o  project sessions
     c  settings             a  API cost (legacy)
-    ?  help overlay          q  quit
+    i  Claude status        ?  help overlay
+    q  quit
 """
 
 import json
@@ -46,6 +47,121 @@ from chart import (
 )
 
 _original_termios = None
+
+
+# ── Claude status page (Atlassian Statuspage v2 API) ────────────────
+
+_STATUS_CACHE_PATH = os.path.join(
+    os.path.expanduser("~"), ".claude", "api-status-cache.json"
+)
+
+
+def _fetch_api_status():
+    """Get Claude API status, using a file-based cache with TTL.
+
+    Returns dict with keys: status, components, incidents — or None.
+    Cache is shared across statusline and monitor invocations.
+    """
+    if not get_setting("status", "enabled", default=True):
+        return None
+
+    ttl = max(30, get_setting("status", "ttl", default=120))
+    cache = None
+
+    # Read cache
+    try:
+        with open(_STATUS_CACHE_PATH, "r") as f:
+            cache = json.load(f)
+        if time.time() - cache.get("fetched_at", 0) < ttl:
+            return cache
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+
+    # Fetch fresh in background thread to avoid blocking curses loop
+    def _do_fetch():
+        try:
+            import http.client
+            import ssl
+            ctx = ssl.create_default_context()
+            conn = http.client.HTTPSConnection(
+                "status.claude.com", timeout=2, context=ctx
+            )
+            try:
+                conn.request("GET", "/api/v2/summary.json",
+                              headers={"Accept": "application/json"})
+                resp = conn.getresponse()
+                if resp.status == 200:
+                    data = json.loads(resp.read())
+                    result = {
+                        "fetched_at": time.time(),
+                        "status": data.get("status", {}).get("indicator", "none"),
+                        "components": {
+                            c["name"]: c["status"]
+                            for c in data.get("components", [])
+                        },
+                        "incidents": [
+                            {"name": i["name"], "status": i["status"],
+                             "impact": i["impact"]}
+                            for i in data.get("incidents", [])
+                        ],
+                    }
+                    os.makedirs(os.path.dirname(_STATUS_CACHE_PATH), exist_ok=True)
+                    tmp = _STATUS_CACHE_PATH + ".tmp"
+                    with open(tmp, "w") as f:
+                        json.dump(result, f)
+                    os.replace(tmp, _STATUS_CACHE_PATH)
+            finally:
+                conn.close()
+        except Exception:
+            pass
+
+    t = threading.Thread(target=_do_fetch, daemon=True)
+    t.start()
+
+    return cache  # return stale cache while refresh happens in background
+
+
+def _format_api_status(status_data):
+    """Format API status for display. Returns colored string or empty."""
+    if not status_data:
+        return ""
+
+    show_when_ok = get_setting("status", "show_when_operational", default=False)
+    components = status_data.get("components", {})
+    overall = status_data.get("status", "none")
+
+    severity_order = ["operational", "degraded_performance",
+                      "partial_outage", "major_outage"]
+    worst = "operational"
+    worst_name = ""
+    for name, st in components.items():
+        if st in severity_order:
+            if severity_order.index(st) > severity_order.index(worst):
+                worst = st
+                worst_name = name
+
+    if worst == "operational" and overall == "none":
+        if show_when_ok:
+            return f"{GREEN}\u25cf{RESET} {GRAY}ok{RESET}"
+        return ""
+
+    if worst == "degraded_performance":
+        return f"{YELLOW}\u25b2 degraded{RESET}"
+    elif worst == "partial_outage":
+        label = "Code partial" if "Code" in worst_name else "partial outage"
+        return f"{ORANGE}\u25b2 {label}{RESET}"
+    elif worst == "major_outage":
+        label = "Code outage" if "Code" in worst_name else "outage"
+        return f"{RED}\u25b2 {label}{RESET}"
+
+    if overall == "minor":
+        return f"{YELLOW}\u25b2 degraded{RESET}"
+    elif overall == "major":
+        return f"{ORANGE}\u25b2 outage{RESET}"
+    elif overall == "critical":
+        return f"{RED}\u25b2 outage{RESET}"
+
+    return ""
 
 
 # ── Dashboard rendering ─────────────────────────────────────────────
@@ -261,7 +377,10 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
 
     lines = []
     lines.append(sep)
-    lines.append(f"  {status_dot} {BOLD}{MAGENTA}{r['model'] or 'unknown'}{RESET}  {DIM}│{RESET}  {GRAY}{r['session_id']}{RESET}  {DIM}│{RESET}  {WHITE}{duration}{RESET}  {DIM}│{RESET}  {status_text}{turn_timer}")
+    # Claude API status indicator (appended to header when not operational)
+    api_status_str = _format_api_status(_fetch_api_status())
+    api_suffix = f"  {DIM}│{RESET}  {api_status_str}" if api_status_str else ""
+    lines.append(f"  {status_dot} {BOLD}{MAGENTA}{r['model'] or 'unknown'}{RESET}  {DIM}│{RESET}  {GRAY}{r['session_id']}{RESET}  {DIM}│{RESET}  {WHITE}{duration}{RESET}  {DIM}│{RESET}  {status_text}{turn_timer}{api_suffix}")
     lines.append("")
 
     # Context section
@@ -476,6 +595,7 @@ def render_footer(term_width):
             f"{BOLD}{CYAN}e{RESET}{DIM}xport{RESET}  "
             f"{DIM}sessi{RESET}{BOLD}{CYAN}o{RESET}{DIM}ns{RESET}  "
             f"{BOLD}{CYAN}c{RESET}{DIM}onfig{RESET}  "
+            f"{BOLD}{CYAN}i{RESET}{DIM}nfo{RESET}  "
             f"{BOLD}{CYAN}?{RESET}{DIM}help{RESET}  "
             f"{BOLD}{CYAN}q{RESET}{DIM}uit{RESET}"
         )
@@ -489,6 +609,7 @@ def render_footer(term_width):
             f"{BOLD}{CYAN}e{RESET}{DIM}xp{RESET} "
             f"{BOLD}{CYAN}o{RESET}{DIM}ss{RESET} "
             f"{BOLD}{CYAN}c{RESET}{DIM}fg{RESET} "
+            f"{BOLD}{CYAN}i{RESET}{DIM}nf{RESET} "
             f"{BOLD}{CYAN}?{RESET} "
             f"{BOLD}{CYAN}q{RESET}"
         )
@@ -502,6 +623,7 @@ def render_footer(term_width):
             f"{BOLD}{CYAN}e{RESET} "
             f"{BOLD}{CYAN}o{RESET} "
             f"{BOLD}{CYAN}c{RESET} "
+            f"{BOLD}{CYAN}i{RESET} "
             f"{BOLD}{CYAN}?{RESET} "
             f"{BOLD}{CYAN}q{RESET}"
         )
@@ -755,6 +877,7 @@ def render_help_overlay(term_width):
         ("o", "List sessions — browse sessions for this project"),
         ("c", "Settings — compaction, sparkline, display config"),
         ("a", "API cost breakdown (legacy)"),
+        ("i", "Claude status — component health, active incidents"),
         ("?", "Toggle this help overlay"),
         ("q", "Quit the monitor"),
     ]
@@ -784,6 +907,74 @@ def render_help_overlay(term_width):
     lines.append(f"    Edit {CYAN}~/.claude/claudeui.json{RESET} (hot-reloads):")
     lines.append(f"    {DIM}•{RESET} sparkline.mode      {DIM}—{RESET} \"tail\" (last N) or \"merge\" (combine turns)")
     lines.append(f"    {DIM}•{RESET} sparkline.merge_size {DIM}—{RESET} turns per bar in merge mode (default: 2)")
+    lines.append("")
+    lines.append(f"  {BOLD}{'─' * w}{RESET}")
+    lines.append(f"  {DIM}Press any key to close{RESET}")
+    return lines
+
+
+def render_status_overlay(term_width):
+    """Render Claude API status overlay with all components and incidents."""
+    w = min(term_width - 4, 60)
+    lines = []
+    lines.append("")
+    lines.append(f"  {BOLD}{'─' * w}{RESET}")
+    lines.append(f"  {BOLD}  CLAUDE STATUS{RESET}  {DIM}status.claude.com{RESET}")
+    lines.append(f"  {'─' * w}")
+    lines.append("")
+
+    status_data = _fetch_api_status()
+    if not status_data:
+        lines.append(f"    {GRAY}Fetching status...{RESET}")
+        lines.append("")
+        lines.append(f"  {BOLD}{'─' * w}{RESET}")
+        lines.append(f"  {DIM}Press any key to close{RESET}")
+        return lines
+
+    # Component statuses
+    status_icons = {
+        "operational": f"{GREEN}\u25cf operational{RESET}",
+        "degraded_performance": f"{YELLOW}\u25b2 degraded{RESET}",
+        "partial_outage": f"{ORANGE}\u25b2 partial outage{RESET}",
+        "major_outage": f"{RED}\u25b2 major outage{RESET}",
+    }
+
+    components = status_data.get("components", {})
+    max_name = max((len(n) for n in components), default=0)
+    for name, st in components.items():
+        icon = status_icons.get(st, f"{GRAY}{st}{RESET}")
+        lines.append(f"    {WHITE}{name:<{max_name}}{RESET}  {icon}")
+
+    # Active incidents
+    incidents = status_data.get("incidents", [])
+    if incidents:
+        lines.append("")
+        lines.append(f"  {BOLD}  ACTIVE INCIDENTS{RESET}")
+        lines.append(f"  {'─' * w}")
+        lines.append("")
+        for inc in incidents:
+            impact = inc.get("impact", "none")
+            if impact == "critical":
+                ic = RED
+            elif impact == "major":
+                ic = ORANGE
+            else:
+                ic = YELLOW
+            lines.append(
+                f"    {ic}\u25b2{RESET} {inc['name']} {DIM}— {inc['status']}{RESET}"
+            )
+    else:
+        lines.append("")
+        lines.append(f"    {GREEN}No active incidents{RESET}")
+
+    # Cache age
+    age = time.time() - status_data.get("fetched_at", 0)
+    if age < 60:
+        age_str = f"{int(age)}s ago"
+    else:
+        age_str = f"{int(age / 60)}m ago"
+    lines.append("")
+    lines.append(f"    {DIM}Updated {age_str}{RESET}")
     lines.append("")
     lines.append(f"  {BOLD}{'─' * w}{RESET}")
     lines.append(f"  {DIM}Press any key to close{RESET}")
@@ -1088,7 +1279,7 @@ def list_sessions():
 
 # ── Input handling ──────────────────────────────────────────────────
 
-VALID_KEYS = frozenset("qQsSdDlLwWeEoOcCaA?")
+VALID_KEYS = frozenset("qQsSdDlLwWeEoOcCaAiI?")
 
 
 def get_key():
@@ -1397,6 +1588,18 @@ def main():
                                     break
                             needs_full_redraw = True
                             continue
+                    elif key in ("i", "I"):
+                        status_lines = render_status_overlay(term_width)
+                        out.write(CLEAR + "\n".join(status_lines))
+                        out.flush()
+                        while running:
+                            if select.select([sys.stdin], [], [], 0.05)[0]:
+                                os.read(sys.stdin.fileno(), 1)
+                                while select.select([sys.stdin], [], [], 0.01)[0]:
+                                    os.read(sys.stdin.fileno(), 1)
+                                break
+                        needs_full_redraw = True
+                        continue
 
                 # Re-parse transcript only when file changes
                 try:

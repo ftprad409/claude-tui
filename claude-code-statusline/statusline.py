@@ -24,6 +24,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 
 # Context window sizes by model family
@@ -237,6 +238,122 @@ def get_model_pricing(model_id):
         if key in model_id:
             return pricing
     return MODEL_PRICING["claude-sonnet-4-6"]
+
+
+# Claude status page (Atlassian Statuspage v2 API)
+_STATUS_CACHE_PATH = os.path.join(
+    os.path.expanduser("~"), ".claude", "api-status-cache.json"
+)
+
+
+def _fetch_api_status():
+    """Get Claude API status, using a file-based cache with TTL.
+
+    Returns dict with keys: status, components, incidents — or None.
+    Cache is shared across statusline and monitor invocations.
+    """
+    if not get_setting("status", "enabled", default=True):
+        return None
+
+    ttl = max(30, get_setting("status", "ttl", default=120))
+    cache = None
+
+    # Read cache
+    try:
+        with open(_STATUS_CACHE_PATH, "r") as f:
+            cache = json.load(f)
+        if time.time() - cache.get("fetched_at", 0) < ttl:
+            return cache
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+
+    # Fetch fresh
+    try:
+        import http.client
+        import ssl
+        ctx = ssl.create_default_context()
+        conn = http.client.HTTPSConnection(
+            "status.claude.com", timeout=2, context=ctx
+        )
+        try:
+            conn.request("GET", "/api/v2/summary.json",
+                          headers={"Accept": "application/json"})
+            resp = conn.getresponse()
+            if resp.status == 200:
+                data = json.loads(resp.read())
+                cache = {
+                    "fetched_at": time.time(),
+                    "status": data.get("status", {}).get("indicator", "none"),
+                    "components": {
+                        c["name"]: c["status"]
+                        for c in data.get("components", [])
+                    },
+                    "incidents": [
+                        {"name": i["name"], "status": i["status"],
+                         "impact": i["impact"]}
+                        for i in data.get("incidents", [])
+                    ],
+                }
+                os.makedirs(os.path.dirname(_STATUS_CACHE_PATH), exist_ok=True)
+                tmp = _STATUS_CACHE_PATH + ".tmp"
+                with open(tmp, "w") as f:
+                    json.dump(cache, f)
+                os.replace(tmp, _STATUS_CACHE_PATH)
+                return cache
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+    return cache  # stale cache better than nothing
+
+
+def _format_api_status(status_data):
+    """Format API status for statusline display.
+
+    Returns colored string or empty string if operational.
+    """
+    if not status_data:
+        return ""
+
+    show_when_ok = get_setting("status", "show_when_operational", default=False)
+    components = status_data.get("components", {})
+    overall = status_data.get("status", "none")
+
+    # Find worst component status
+    severity_order = ["operational", "degraded_performance",
+                      "partial_outage", "major_outage"]
+    worst = "operational"
+    worst_name = ""
+    for name, st in components.items():
+        if st in severity_order:
+            if severity_order.index(st) > severity_order.index(worst):
+                worst = st
+                worst_name = name
+
+    if worst == "operational" and overall == "none":
+        if show_when_ok:
+            return f"{GREEN}\u25cf{RESET} {GRAY}ok{RESET}"
+        return ""
+
+    if worst == "degraded_performance":
+        return f"{YELLOW}\u25b2 degraded{RESET}"
+    elif worst == "partial_outage":
+        label = "Code partial" if "Code" in worst_name else "partial outage"
+        return f"{ORANGE}\u25b2 {label}{RESET}"
+    elif worst == "major_outage":
+        label = "Code outage" if "Code" in worst_name else "outage"
+        return f"{RED}\u25b2 {label}{RESET}"
+
+    # Overall indicator fallback
+    if overall == "minor":
+        return f"{YELLOW}\u25b2 degraded{RESET}"
+    elif overall == "major":
+        return f"{ORANGE}\u25b2 outage{RESET}"
+    elif overall == "critical":
+        return f"{RED}\u25b2 outage{RESET}"
+
+    return ""
 
 
 def parse_transcript(transcript_path, context_limit=None):
@@ -793,6 +910,12 @@ def main():
             eff_color = RED
         efficiency_part = f"{eff_color}{eff_pct}%{RESET} {GRAY}eff{RESET}"
 
+    # Claude API status (fetched once, used by both full and compact modes)
+    api_status_str = ""
+    if is_visible("line2", "api_status"):
+        api_status = _fetch_api_status()
+        api_status_str = _format_api_status(api_status)
+
     dim = GRAY
     sep = f" {dim}\u22ee{RESET} "
 
@@ -861,6 +984,9 @@ def main():
         line2_parts.append(
             f"{CYAN}{metrics['subagent_count']}{RESET} {dim}agents{RESET}"
         )
+
+    if api_status_str:
+        line2_parts.append(api_status_str)
 
     # Line 3+: live activity trace (wraps to extra lines if needed)
     line3_lines = []
@@ -954,6 +1080,8 @@ def main():
             compact_parts.append(f"{err_color}{metrics['tool_errors']}{RESET} {dim}err{RESET}")
         if efficiency_part:
             compact_parts.append(efficiency_part)
+        if api_status_str and is_visible("line2", "api_status"):
+            compact_parts.append(api_status_str)
         if compact_parts:
             print(f" {sep.join(compact_parts)}")
         return

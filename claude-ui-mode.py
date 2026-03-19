@@ -69,7 +69,7 @@ CUSTOM_HELP = f"""\
   {DIM}Line 1:{RESET} model, context_bar, token_count, compact_prediction,
           sparkline, cost, duration, compact_count, efficiency, session_id
   {DIM}Line 2:{RESET} cwd, git_branch, turns, files, errors, cache,
-          thinking, cost_per_turn, agents
+          thinking, cost_per_turn, agents, api_status
   {DIM}Line 3:{RESET} tool_trace, file_edits
 
 {BOLD}Presets:{RESET}
@@ -161,6 +161,7 @@ COMPONENTS = [
     ("thinking",           "line2", "Thinking",        "4x think",                            5),
     ("cost_per_turn",      "line2", "Cost/turn",       "~$0.13/turn",                         4),
     ("agents",             "line2", "Agents",          "2 agents",                            3),
+    ("api_status",         "line2", "API status",      "\u25b2 degraded",                       4),
     ("tool_trace",         "line3", "Tool trace",      "read \u2192 edit \u2192 bash \u2192 edit", 0),
     ("file_edits",         "line3", "File edits",      "statusline.py\u00d73 README.md\u00d71",   0),
 ]
@@ -187,7 +188,7 @@ PRESETS = {
                   "efficiency": False, "session_id": False},
         "line2": {"cwd": False, "git_branch": False, "cache": False,
                   "cost_per_turn": False, "agents": False, "thinking": False,
-                  "files": False},
+                  "files": False, "api_status": False},
         "line3": {"file_edits": False},
     },
     "focused": {

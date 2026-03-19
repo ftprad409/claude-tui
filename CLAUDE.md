@@ -63,7 +63,7 @@ Live session dashboard for a separate terminal.
 - Tests: `claude-code-monitor/test_monitor.py` (run with `python3 -v`)
 - Watches transcript file for changes, refreshes on file change
 - Args: none (auto-detect), `<session-id>`, `--list`, or `--chart [session-id]`
-- Hotkeys: `s` stats, `d` details, `l` log viewer, `w` efficiency chart, `e` export, `o` sessions, `c` config, `?` help
+- Hotkeys: `s` stats, `d` details, `l` log viewer, `w` efficiency chart, `e` export, `o` sessions, `c` config, `i` Claude status, `?` help
 - Efficiency chart: `w` hotkey or `claudetui chart` standalone — 4-component bar chart: system (cyan), summary (yellow), useful (green), headroom (gray). Press `?` for info overlay. Live updates via transcript file polling
 - Log viewer: `f` cycles filter (all/errors/bash/edits/search/agents/skills/compactions), `a` toggles live auto-scroll
 - Agent tracking: logs spawns/completions in event log; CURRENT section shows active/total agents per turn
@@ -103,7 +103,16 @@ Claude Code hooks for automatic in-session context. Three hook scripts:
 - Config file: `~/.claude/claudeui.json` — shared between statusline and monitor
 - Hot-reloads: both tools re-read on file change, no restart needed
 - Settings: `sparkline.mode` (`"tail"` or `"merge"`), `sparkline.merge_size` (turns per bar, default: 2), `monitor.log_lines` (0–50, default: 8, 0 = off)
+- Status page: `status.enabled` (default: `true`), `status.ttl` (cache TTL in seconds, default: `120`, min: `30`), `status.show_when_operational` (default: `false`)
 - Config loader: `load_settings()` / `get_setting(*keys, default=...)` in each tool (statusline is self-contained; monitor imports from `lib.py`)
+
+### Claude Status Page Integration
+
+- API: Atlassian Statuspage v2 at `https://status.claude.com/api/v2/summary.json` (public, no auth)
+- Cache: `~/.claude/api-status-cache.json` with configurable TTL (default 120s)
+- Statusline: shows indicator on line2 when any component is not operational (▲ degraded / ▲ outage)
+- Monitor: same indicator in header line; `i` hotkey opens detailed status overlay with all components + incidents
+- Fetcher is inlined in both statusline.py and monitor.py (same convention as MODEL_PRICING etc.)
 
 ## Testing
 
@@ -152,6 +161,7 @@ python3 claudetui.py --help          # test dispatcher
 ## Gotchas
 
 - **Duplicated constants**: `MODEL_PRICING`, `MODEL_CONTEXT_WINDOW`, `COMPACT_BUFFER`, and `get_context_limit()` exist in 3 places: `statusline.py`, `monitor/lib.py`, and `commands/tui/lib.py`. The statusline is self-contained (no imports from monitor); commands are standalone too. Keep all three in sync when updating pricing or adding models.
+- **Duplicated fetcher**: `_fetch_api_status()` and `_format_api_status()` exist in both `statusline.py` and `monitor.py`. Keep in sync when changing status page logic.
 - **Transcript format**: Compaction entries use `{"type": "system", "subtype": "compact_boundary"}`. Thinking blocks use `{"type": "thinking"}` in assistant message content (token counts redacted by the API).
 - **Widget API**: Widget functions have signature `widget_fn(frame, ratio) -> list[str]` returning exactly 3 rows.
 
