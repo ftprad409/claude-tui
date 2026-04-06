@@ -1449,7 +1449,8 @@ def main():
         print(_truncate(f" {wdg[0]}{line1_str}", term_cols_padded))
         print(_truncate(f" {wdg[1]}{line2_str}", term_cols_padded))
         first_extra = line3_lines[0] if line3_lines else ""
-        print(_truncate(f" {wdg[2]}{first_extra}", term_cols_padded))
+        if first_extra:
+            print(_truncate(f" {wdg[2]}{first_extra}", term_cols_padded))
         for extra_line in line3_lines[1:]:
             print(_truncate(f"        {extra_line}", term_cols_padded))
     else:
