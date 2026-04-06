@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 
 # Context window sizes by model family
 MODEL_CONTEXT_WINDOW = {
-    "claude-opus-4": 1_000_000,   # 1M context via anthropic-beta flag
+    "claude-opus-4": 1_000_000,  # 1M context via anthropic-beta flag
 }
 DEFAULT_CONTEXT_LIMIT = 200_000
 # Compaction triggers when remaining capacity drops below this buffer
@@ -43,16 +43,42 @@ def get_context_limit(model_id):
             return limit
     return DEFAULT_CONTEXT_LIMIT
 
+
 # Pricing per million tokens (as of 2025)
 # https://docs.anthropic.com/en/docs/about-claude/models
 MODEL_PRICING = {
     # Claude 4.6 / 4.5  (cache_write = 1.25x input per Anthropic pricing)
-    "claude-opus-4-6": {"input": 15.0, "cache_read": 1.5, "cache_write": 18.75, "output": 75.0},
-    "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
-    "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
+    "claude-opus-4-6": {
+        "input": 15.0,
+        "cache_read": 1.5,
+        "cache_write": 18.75,
+        "output": 75.0,
+    },
+    "claude-sonnet-4-6": {
+        "input": 3.0,
+        "cache_read": 0.30,
+        "cache_write": 3.75,
+        "output": 15.0,
+    },
+    "claude-haiku-4-5": {
+        "input": 0.80,
+        "cache_read": 0.08,
+        "cache_write": 1.0,
+        "output": 4.0,
+    },
     # Claude 3.5
-    "claude-sonnet-3-5": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
-    "claude-haiku-3-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
+    "claude-sonnet-3-5": {
+        "input": 3.0,
+        "cache_read": 0.30,
+        "cache_write": 3.75,
+        "output": 15.0,
+    },
+    "claude-haiku-3-5": {
+        "input": 0.80,
+        "cache_read": 0.08,
+        "cache_write": 1.0,
+        "output": 4.0,
+    },
 }
 
 # ANSI color codes
@@ -99,12 +125,15 @@ def _get_terminal_cols():
     that TTY device for the actual terminal dimensions.
     """
     import fcntl, struct, termios
+
     try:
         pid = os.getpid()
         for _ in range(10):
             result = subprocess.run(
                 ["ps", "-p", str(pid), "-o", "ppid=,tty="],
-                capture_output=True, text=True, timeout=1,
+                capture_output=True,
+                text=True,
+                timeout=1,
             )
             parts = result.stdout.split()
             if len(parts) < 2:
@@ -174,14 +203,13 @@ def _load_widget(name):
     """Load a widget by name from the widgets/ directory."""
     if name == "none":
         return None
-    widgets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               "widgets")
+    widgets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "widgets")
     widget_path = os.path.join(widgets_dir, f"{name}.py")
     if not os.path.exists(widget_path):
         return None
     import importlib.util
-    spec = importlib.util.spec_from_file_location(f"widgets.{name}",
-                                                   widget_path)
+
+    spec = importlib.util.spec_from_file_location(f"widgets.{name}", widget_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return getattr(mod, "render", None)
@@ -196,7 +224,7 @@ def get_git_branch():
         with open(git_head, "r") as f:
             ref = f.read().strip()
         if ref.startswith("ref: refs/heads/"):
-            return ref[len("ref: refs/heads/"):]
+            return ref[len("ref: refs/heads/") :]
         return ref[:8]  # detached HEAD — show short hash
     except Exception:
         return ""
@@ -206,8 +234,7 @@ def get_git_diff_stat():
     """Get git working tree diff stats (+added/-deleted lines)."""
     try:
         result = subprocess.run(
-            ["git", "diff", "--shortstat"],
-            capture_output=True, text=True, timeout=3
+            ["git", "diff", "--shortstat"], capture_output=True, text=True, timeout=3
         )
         stat = result.stdout.strip()
         if not stat:
@@ -271,13 +298,13 @@ def _fetch_api_status():
     try:
         import http.client
         import ssl
+
         ctx = ssl.create_default_context()
-        conn = http.client.HTTPSConnection(
-            "status.claude.com", timeout=2, context=ctx
-        )
+        conn = http.client.HTTPSConnection("status.claude.com", timeout=2, context=ctx)
         try:
-            conn.request("GET", "/api/v2/summary.json",
-                          headers={"Accept": "application/json"})
+            conn.request(
+                "GET", "/api/v2/summary.json", headers={"Accept": "application/json"}
+            )
             resp = conn.getresponse()
             if resp.status == 200:
                 data = json.loads(resp.read())
@@ -285,12 +312,14 @@ def _fetch_api_status():
                     "fetched_at": time.time(),
                     "status": data.get("status", {}).get("indicator", "none"),
                     "components": {
-                        c["name"]: c["status"]
-                        for c in data.get("components", [])
+                        c["name"]: c["status"] for c in data.get("components", [])
                     },
                     "incidents": [
-                        {"name": i["name"], "status": i["status"],
-                         "impact": i["impact"]}
+                        {
+                            "name": i["name"],
+                            "status": i["status"],
+                            "impact": i["impact"],
+                        }
                         for i in data.get("incidents", [])
                     ],
                 }
@@ -321,8 +350,12 @@ def _format_api_status(status_data):
     overall = status_data.get("status", "none")
 
     # Find worst component status
-    severity_order = ["operational", "degraded_performance",
-                      "partial_outage", "major_outage"]
+    severity_order = [
+        "operational",
+        "degraded_performance",
+        "partial_outage",
+        "major_outage",
+    ]
     worst = "operational"
     worst_name = ""
     for name, st in components.items():
@@ -356,6 +389,303 @@ def _format_api_status(status_data):
     return ""
 
 
+# OAuth usage API cache
+_USAGE_CACHE_PATH = os.path.join(os.path.expanduser("~"), ".claude", "usage-cache.json")
+_USAGE_MIN_INTERVAL = 60  # rate limit: minimum 60 seconds between requests
+
+
+def _load_oauth_token():
+    """Load OAuth token from Keychain, credentials file, or environment."""
+    # Try environment variable first
+    token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+    if token:
+        return token
+
+    # Try credentials file
+    creds_path = os.path.join(os.path.expanduser("~"), ".claude", ".credentials.json")
+    try:
+        with open(creds_path, "r") as f:
+            creds = json.load(f)
+        # Try claudeAiOauth key first, then root level
+        token = creds.get("claudeAiOauth", {}).get("accessToken") or creds.get(
+            "accessToken"
+        )
+        if token:
+            return token
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+
+    # Try Keychain (macOS)
+    try:
+        result = subprocess.run(
+            [
+                "security",
+                "find-generic-password",
+                "-s",
+                "Claude Code-credentials",
+                "-w",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            blob = json.loads(result.stdout.strip())
+            token = blob.get("claudeAiOauth", {}).get("accessToken") or blob.get(
+                "accessToken"
+            )
+            if token:
+                return token
+    except (
+        FileNotFoundError,
+        json.JSONDecodeError,
+        subprocess.TimeoutExpired,
+        OSError,
+    ):
+        pass
+
+    return None
+
+
+def _fetch_usage():
+    """Get Claude plan usage via OAuth API, using file-based cache with rate limiting.
+
+    Returns dict with keys: five_hour, seven_day, seven_day_sonnet, extra_usage — or None.
+    Cache is shared across statusline and monitor invocations.
+    """
+    if not get_setting("usage", "enabled", default=True):
+        return None
+
+    # Rate limiting: minimum interval between API calls
+    rate_limit = max(60, get_setting("usage", "rate_limit", default=60))
+    cache = None
+
+    # Read cache
+    try:
+        with open(_USAGE_CACHE_PATH, "r") as f:
+            cache = json.load(f)
+        if time.time() - cache.get("fetched_at", 0) < rate_limit:
+            return cache
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+
+    # Fetch fresh
+    token = _load_oauth_token()
+    if not token:
+        return cache  # return stale cache if no token
+
+    try:
+        import http.client
+        import ssl
+
+        ctx = ssl.create_default_context()
+        conn = http.client.HTTPSConnection("api.anthropic.com", timeout=3, context=ctx)
+        try:
+            conn.request(
+                "GET",
+                "/api/oauth/usage",
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}",
+                    "anthropic-beta": "oauth-2025-04-20",
+                },
+            )
+            resp = conn.getresponse()
+            if resp.status == 200:
+                data = json.loads(resp.read())
+                cache = {
+                    "fetched_at": time.time(),
+                    "five_hour": data.get("five_hour", {}),
+                    "seven_day": data.get("seven_day", {}),
+                    "seven_day_sonnet": data.get("seven_day_sonnet", {}),
+                    "extra_usage": data.get("extra_usage", {}),
+                }
+                os.makedirs(os.path.dirname(_USAGE_CACHE_PATH), exist_ok=True)
+                tmp = _USAGE_CACHE_PATH + ".tmp"
+                with open(tmp, "w") as f:
+                    json.dump(cache, f)
+                os.replace(tmp, _USAGE_CACHE_PATH)
+                return cache
+            elif resp.status == 429:
+                # Rate limited - return stale cache
+                pass
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+    return cache  # stale cache better than nothing
+
+
+def _format_reset_time(iso_time: str) -> str:
+    """Format ISO reset time to short duration like '2h' or '30m'."""
+    if not iso_time:
+        return ""
+    try:
+        from datetime import datetime
+
+        reset_dt = datetime.fromisoformat(iso_time.replace("Z", "+00:00"))
+        now_dt = datetime.now(reset_dt.tzinfo)
+        diff = (reset_dt - now_dt).total_seconds()
+        if diff <= 0:
+            return ""
+        hours = int(diff // 3600)
+        mins = int((diff % 3600) // 60)
+        if hours > 0:
+            return f"{hours}h"
+        else:
+            return f"{mins}m"
+    except Exception:
+        return ""
+
+
+def _format_usage_session(usage_data: dict | None, length: int = 20) -> str:
+    """Format session (5-hour) usage for line 2.
+
+    Returns string like "████████████████████ 15%  ↻ 2h  " or empty if no data.
+    Fixed width for consistent display - no line jumping.
+    """
+    if not usage_data:
+        return ""
+
+    five_hour = usage_data.get("five_hour", {})
+    if not five_hour:
+        return ""
+
+    pct = five_hour.get("utilization", 0)
+    if pct is None:
+        return ""
+
+    ratio = min(pct / 100.0, 1.0)
+    filled = int(length * ratio)
+    color = _color_for_ratio(ratio)
+    bar = (
+        f"{color}"
+        + "\u2588" * filled
+        + f"{GRAY}"
+        + "\u2591" * (length - filled)
+        + f"{RESET}"
+    )
+    pct_int = int(pct)
+    reset = _format_reset_time(five_hour.get("resets_at", ""))
+    reset_str = f" \u21bb {reset}" if reset else ""
+
+    # Pad to fixed width for consistent display (bar=20 + pct=4 + reset=6 = 30)
+    pct_str = f"{color}{pct_int:>3}%{RESET}"
+    reset_str = reset_str.ljust(6)  # max " ↻ 99h" = 6 chars
+
+    return f"{bar} {pct_str} {reset_str}"
+
+
+def _format_usage_weekly(usage_data: dict | None, length: int = 20) -> str:
+    """Format weekly usage for line 3.
+
+    Returns string like "████████████████████ 73%w  ↻ 3h  " or empty if no data.
+    Fixed width for consistent display - no line jumping.
+    """
+    if not usage_data:
+        return ""
+
+    seven_day = usage_data.get("seven_day", {})
+    if not seven_day:
+        return ""
+
+    pct = seven_day.get("utilization", 0)
+    if pct is None:
+        return ""
+
+    ratio = min(pct / 100.0, 1.0)
+    filled = int(length * ratio)
+    color = _color_for_ratio(ratio)
+    bar = (
+        f"{color}"
+        + "\u2588" * filled
+        + f"{GRAY}"
+        + "\u2591" * (length - filled)
+        + f"{RESET}"
+    )
+    pct_int = int(pct)
+    reset = _format_reset_time(seven_day.get("resets_at", ""))
+    reset_str = f" \u21bb {reset}" if reset else ""
+
+    # Pad to fixed width for consistent display (bar=20 + pct=5 + reset=6 = 31)
+    pct_str = f"{color}{pct_int:>3}%{RESET}{GRAY}w{RESET}"
+    reset_str = reset_str.ljust(6)  # max " ↻ 99h" = 6 chars
+
+    return f"{bar} {pct_str} {reset_str}"
+
+
+def _format_usage_weekly(usage_data, length=20):
+    """Format weekly usage for line 3.
+
+    Returns string like "████████████████████ 73%w  ↻ 3h  " or empty if no data.
+    Fixed width for consistent display - no line jumping.
+    """
+    if not usage_data:
+        return ""
+
+    def format_reset(iso_time):
+        if not iso_time:
+            return ""
+        try:
+            from datetime import datetime
+
+            reset_dt = datetime.fromisoformat(iso_time.replace("Z", "+00:00"))
+            now_dt = datetime.now(reset_dt.tzinfo)
+            diff = (reset_dt - now_dt).total_seconds()
+            if diff <= 0:
+                return ""
+            hours = int(diff // 3600)
+            mins = int((diff % 3600) // 60)
+            if hours > 0:
+                return f"{hours}h"
+            else:
+                return f"{mins}m"
+        except Exception:
+            return ""
+
+    seven_day = usage_data.get("seven_day", {})
+    if not seven_day:
+        return ""
+
+    pct = seven_day.get("utilization", 0)
+    if pct is None:
+        return ""
+
+    ratio = min(pct / 100.0, 1.0)
+    filled = int(length * ratio)
+    color = _color_for_ratio(ratio)
+    bar = (
+        f"{color}"
+        + "\u2588" * filled
+        + f"{GRAY}"
+        + "\u2591" * (length - filled)
+        + f"{RESET}"
+    )
+    pct_int = int(pct)
+    reset = format_reset(seven_day.get("resets_at"))
+    reset_str = f" \u21bb {reset}" if reset else ""
+
+    # Pad to fixed width for consistent display (bar=20 + pct=5 + reset=6 = 31)
+    pct_str = f"{color}{pct_int:>3}%{RESET}{GRAY}w{RESET}"
+    reset_str = reset_str.ljust(6)  # max " ↻ 99h" = 6 chars
+
+    return f"{bar} {pct_str} {reset_str}"
+
+
+def _color_for_ratio(ratio):
+    """Get color for ratio (same as context bar)."""
+    if ratio >= 0.95:
+        return RED
+    elif ratio >= 0.85:
+        return ORANGE
+    elif ratio >= 0.60:
+        return YELLOW
+    else:
+        return GREEN
+
+
 def parse_transcript(transcript_path, context_limit=None):
     """Parse transcript file to extract all session metrics."""
     if context_limit is None:
@@ -375,14 +705,14 @@ def parse_transcript(transcript_path, context_limit=None):
         "turn_count": 0,
         "thinking_count": 0,
         "context_history": [],
-        "context_per_turn": [],   # cumulative context at each turn (since last compact)
-        "tokens_wasted": 0,       # tokens lost to compaction overhead
-        "total_context_built": 0, # sum of peak context per segment (for efficiency calc)
+        "context_per_turn": [],  # cumulative context at each turn (since last compact)
+        "tokens_wasted": 0,  # tokens lost to compaction overhead
+        "total_context_built": 0,  # sum of peak context per segment (for efficiency calc)
         "recent_tools": [],
         "current_turn_file_edits": {},
         "turns_since_compact": 0,
         "context_at_last_compact": 0,
-        "_pre_compact_ctx": 0,    # context just before compaction (internal)
+        "_pre_compact_ctx": 0,  # context just before compaction (internal)
     }
 
     try:
@@ -404,10 +734,8 @@ def parse_transcript(transcript_path, context_limit=None):
             continue
 
         # If we hit a compaction before finding usage, context was reset
-        if (
-            obj.get("type") == "summary"
-            or (obj.get("type") == "system"
-                and obj.get("subtype") == "compact_boundary")
+        if obj.get("type") == "summary" or (
+            obj.get("type") == "system" and obj.get("subtype") == "compact_boundary"
         ):
             break
 
@@ -471,17 +799,19 @@ def parse_transcript(transcript_path, context_limit=None):
         ):
             usage = obj["message"]["usage"]
             result["input_tokens_total"] += usage.get("input_tokens", 0)
-            result["cache_read_tokens_total"] += usage.get(
-                "cache_read_input_tokens", 0
-            )
+            result["cache_read_tokens_total"] += usage.get("cache_read_input_tokens", 0)
             result["cache_creation_tokens_total"] += usage.get(
                 "cache_creation_input_tokens", 0
             )
             result["output_tokens_total"] += usage.get("output_tokens", 0)
 
             # Per-response context snapshot
-            keys_ctx = ["input_tokens", "cache_creation_input_tokens",
-                        "cache_read_input_tokens", "output_tokens"]
+            keys_ctx = [
+                "input_tokens",
+                "cache_creation_input_tokens",
+                "cache_read_input_tokens",
+                "output_tokens",
+            ]
             ctx_snapshot = sum(usage.get(k, 0) for k in keys_ctx)
             result["_pre_compact_ctx"] = ctx_snapshot
 
@@ -490,7 +820,10 @@ def parse_transcript(transcript_path, context_limit=None):
                 result["context_at_last_compact"] = ctx_snapshot
                 # Record waste: headroom + summary (rebuild minus system prompt)
                 # System prompt (cache_read) is constant overhead, not compaction waste
-                if result["compact_count"] > 0 and result.get("_ctx_before_compact", 0) > 0:
+                if (
+                    result["compact_count"] > 0
+                    and result.get("_ctx_before_compact", 0) > 0
+                ):
                     pre = result["_ctx_before_compact"]
                     cache_r = usage.get("cache_read_input_tokens", 0)
                     headroom = max(0, context_limit - pre)
@@ -511,15 +844,18 @@ def parse_transcript(transcript_path, context_limit=None):
 
         # Compact count — also record a 0 in context history (visual cliff)
         if obj.get("type") == "summary" or (
-            obj.get("type") == "system"
-            and obj.get("subtype") == "compact_boundary"
+            obj.get("type") == "system" and obj.get("subtype") == "compact_boundary"
         ):
             result["compact_count"] += 1
             result["context_history"].append(None)
             result["_ctx_before_compact"] = result["_pre_compact_ctx"]
-            result["total_context_built"] += context_limit  # full window budget per segment
+            result["total_context_built"] += (
+                context_limit  # full window budget per segment
+            )
             result["turns_since_compact"] = 0
-            result["context_at_last_compact"] = -1  # sentinel: next usage will set baseline
+            result[
+                "context_at_last_compact"
+            ] = -1  # sentinel: next usage will set baseline
             result["context_per_turn"] = []  # reset per-turn tracking
 
         # Tool calls, thinking, errors, files, and subagents
@@ -544,17 +880,13 @@ def parse_transcript(transcript_path, context_limit=None):
                                 file_arg = os.path.basename(inp[key])
                                 break
                         if file_arg:
-                            result["recent_tools"].append(
-                                f"{tool_name} {file_arg}"
-                            )
+                            result["recent_tools"].append(f"{tool_name} {file_arg}")
                         else:
                             cmd = inp.get("command", "")
                             if cmd:
                                 # Show first word of command
                                 short = cmd.split()[0] if cmd.split() else ""
-                                result["recent_tools"].append(
-                                    f"{tool_name} {short}"
-                                )
+                                result["recent_tools"].append(f"{tool_name} {short}")
                             else:
                                 result["recent_tools"].append(tool_name)
 
@@ -563,12 +895,11 @@ def parse_transcript(transcript_path, context_limit=None):
                             if key in inp and isinstance(inp[key], str):
                                 result["files_touched"].add(inp[key])
                                 # Track edits per file this turn
-                                if tool_name in ("Edit", "Write",
-                                                  "MultiEdit"):
+                                if tool_name in ("Edit", "Write", "MultiEdit"):
                                     fname = os.path.basename(inp[key])
                                     result["current_turn_file_edits"][fname] = (
-                                        result["current_turn_file_edits"]
-                                        .get(fname, 0) + 1
+                                        result["current_turn_file_edits"].get(fname, 0)
+                                        + 1
                                     )
 
                         # Sub-agent tracking
@@ -664,7 +995,7 @@ def build_sparkline(values, width=20):
         # Merge consecutive turns into buckets of merge_size
         merged = []
         for i in range(0, len(values), merge_size):
-            bucket = values[i:i + merge_size]
+            bucket = values[i : i + merge_size]
             if None in bucket:
                 merged.append(None)
             else:
@@ -689,16 +1020,15 @@ def build_sparkline(values, width=20):
         idx = int(r * (len(blocks) - 1))
         idx = max(0, min(idx, len(blocks) - 1))
         if r < 0.25:
-            color = "\033[38;2;166;227;161m"   # green
+            color = "\033[38;2;166;227;161m"  # green
         elif r < 0.50:
-            color = "\033[38;2;148;226;213m"   # teal
+            color = "\033[38;2;148;226;213m"  # teal
         elif r < 0.75:
-            color = "\033[38;2;249;226;175m"   # yellow
+            color = "\033[38;2;249;226;175m"  # yellow
         else:
-            color = "\033[38;2;250;179;135m"   # peach
+            color = "\033[38;2;250;179;135m"  # peach
         chars.append(f"{color}{blocks[idx]}{RESET}")
     return "".join(chars)
-
 
 
 def _rgb(r, g, b):
@@ -730,11 +1060,11 @@ def build_progress_bar(ratio, length=20, compact_ratio=None):
 
     # Smooth gradient stops: (position, R, G, B)
     stops = [
-        (0.00, 166, 227, 161),   # green
-        (0.30, 148, 226, 213),   # teal
-        (0.55, 249, 226, 175),   # yellow
-        (0.80, 250, 179, 135),   # peach
-        (1.00, 243, 139, 168),   # pink
+        (0.00, 166, 227, 161),  # green
+        (0.30, 148, 226, 213),  # teal
+        (0.55, 249, 226, 175),  # yellow
+        (0.80, 250, 179, 135),  # peach
+        (1.00, 243, 139, 168),  # pink
     ]
 
     bar_chars = []
@@ -763,7 +1093,9 @@ def build_progress_bar(ratio, length=20, compact_ratio=None):
         pct_color = RED
 
     pct = ratio * 100
-    return f"{bar} {pct_color}{pct:.0f}%{RESET}"
+    # Fixed width: bar(20) + space(1) + pct(4) = 25 chars minimum
+    pct_str = f"{pct_color}{pct:>3.0f}%{RESET}"
+    return f"{bar} {pct_str}"
 
 
 def main():
@@ -790,7 +1122,9 @@ def main():
     # Context usage bar
     ctx_used = metrics["context_tokens"]
     ratio = ctx_used / context_limit if context_limit > 0 else 0
-    compact_ratio = (context_limit - COMPACT_BUFFER) / context_limit if context_limit > 0 else 0.83
+    compact_ratio = (
+        (context_limit - COMPACT_BUFFER) / context_limit if context_limit > 0 else 0.83
+    )
     bar = build_progress_bar(ratio, compact_ratio=compact_ratio)
     tokens_str = format_tokens(int(ctx_used))
     limit_str = format_tokens(context_limit)
@@ -800,7 +1134,9 @@ def main():
     cost = (
         metrics["input_tokens_total"] * pricing["input"] / 1_000_000
         + metrics["cache_read_tokens_total"] * pricing["cache_read"] / 1_000_000
-        + metrics["cache_creation_tokens_total"] * pricing.get("cache_write", pricing["input"] * 1.25) / 1_000_000
+        + metrics["cache_creation_tokens_total"]
+        * pricing.get("cache_write", pricing["input"] * 1.25)
+        / 1_000_000
         + metrics["output_tokens_total"] * pricing["output"] / 1_000_000
     )
     cost_str = format_cost(cost)
@@ -818,9 +1154,7 @@ def main():
             branch_part += f" {diff_stat}"
 
     # Cache hit ratio
-    total_input = (
-        metrics["input_tokens_total"] + metrics["cache_read_tokens_total"]
-    )
+    total_input = metrics["input_tokens_total"] + metrics["cache_read_tokens_total"]
     if total_input > 0:
         cache_ratio = metrics["cache_read_tokens_total"] / total_input
         cache_pct = int(cache_ratio * 100)
@@ -862,9 +1196,11 @@ def main():
         # Compute growth rate using EMA on per-turn context deltas
         turn_contexts = [ctx for _, ctx in metrics["context_per_turn"]]
         if len(turn_contexts) >= 3:
-            deltas = [turn_contexts[i] - turn_contexts[i - 1]
-                      for i in range(1, len(turn_contexts))
-                      if turn_contexts[i] > turn_contexts[i - 1]]
+            deltas = [
+                turn_contexts[i] - turn_contexts[i - 1]
+                for i in range(1, len(turn_contexts))
+                if turn_contexts[i] > turn_contexts[i - 1]
+            ]
             if deltas:
                 alpha = 2 / (min(len(deltas), 5) + 1)
                 ema = deltas[0]
@@ -919,14 +1255,14 @@ def main():
     dim = GRAY
     sep = f" {dim}\u22ee{RESET} "
 
-    # Line 1: session core
+    # Line 1: session core - context_bar first, then other components
     line1_parts = []
-    if is_visible("line1", "model"):
-        line1_parts.append(f"{BOLD}{MAGENTA}{model}{RESET}")
     if is_visible("line1", "context_bar"):
         ctx_part = f"{bar}"
         if is_visible("line1", "token_count"):
-            ctx_part += f" {CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
+            ctx_part += (
+                f" {CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
+            )
         if compact_prediction and is_visible("line1", "compact_prediction"):
             ctx_part += f" {dim}\u22ee{RESET} {compact_prediction}"
         line1_parts.append(ctx_part)
@@ -937,6 +1273,8 @@ def main():
         line1_parts.append(ctx_part)
     elif compact_prediction and is_visible("line1", "compact_prediction"):
         line1_parts.append(compact_prediction)
+    if is_visible("line1", "model"):
+        line1_parts.append(f"{BOLD}{MAGENTA}{model}{RESET}")
     if sparkline_part and is_visible("line1", "sparkline"):
         line1_parts.append(sparkline_part)
     if is_visible("line1", "cost"):
@@ -952,16 +1290,22 @@ def main():
     if is_visible("line1", "session_id"):
         line1_parts.append(f"{dim}#{RESET}{GRAY}{session_id}{RESET}")
 
-    # Line 2: project telemetry
+    # Line 2: project telemetry - usage first, then other components
     line2_parts = []
+
+    # Usage bar (session 5-hour) - first position
+    if is_visible("line2", "usage"):
+        usage = _fetch_usage()
+        usage_session_str = _format_usage_session(usage)
+        if usage_session_str:
+            line2_parts.append(usage_session_str)
+
     if is_visible("line2", "cwd"):
         line2_parts.append(f"{GREEN}{cwd}{RESET}")
     if branch_part and is_visible("line2", "git_branch"):
         line2_parts.append(branch_part)
     if is_visible("line2", "turns"):
-        line2_parts.append(
-            f"{CYAN}{metrics['turn_count']}{RESET} {dim}turns{RESET}"
-        )
+        line2_parts.append(f"{CYAN}{metrics['turn_count']}{RESET} {dim}turns{RESET}")
     if is_visible("line2", "files"):
         line2_parts.append(
             f"{CYAN}{len(metrics['files_touched'])}{RESET} {dim}files{RESET}"
@@ -969,7 +1313,9 @@ def main():
     if is_visible("line2", "errors"):
         if metrics["tool_errors"] > 0:
             err_color = RED if metrics["tool_errors"] > 5 else ORANGE
-            line2_parts.append(f"{err_color}{metrics['tool_errors']}{RESET} {dim}err{RESET}")
+            line2_parts.append(
+                f"{err_color}{metrics['tool_errors']}{RESET} {dim}err{RESET}"
+            )
         else:
             line2_parts.append(f"{GREEN}0{RESET} {dim}err{RESET}")
     if is_visible("line2", "cache"):
@@ -990,6 +1336,14 @@ def main():
 
     # Line 3+: live activity trace (wraps to extra lines if needed)
     line3_lines = []
+
+    # Weekly usage - line 3, first position (with separator)
+    if is_visible("line3", "usage_weekly"):
+        usage = _fetch_usage()
+        usage_weekly_str = _format_usage_weekly(usage)
+        if usage_weekly_str and is_visible("line3", "usage_weekly"):
+            line3_lines.append(usage_weekly_str)
+
     recent = metrics["recent_tools"]
     file_edits = metrics["current_turn_file_edits"]
     trail_items = []
@@ -1003,9 +1357,7 @@ def main():
     file_edit_parts = []
     if file_edits and is_visible("line3", "file_edits"):
         top = sorted(file_edits.items(), key=lambda x: -x[1])[:3]
-        file_edit_parts = [
-            f"{YELLOW}{n}{RESET}{dim}×{c}{RESET}" for n, c in top
-        ]
+        file_edit_parts = [f"{YELLOW}{n}{RESET}{dim}×{c}{RESET}" for n, c in top]
 
     # Wrap trail items across lines based on terminal width
     term_cols = _get_terminal_cols()
@@ -1047,41 +1399,36 @@ def main():
     # ── Compact mode: single line with essentials ──
     if compact_mode:
         compact_parts = []
+
+        # Model name first
         if is_visible("line1", "model"):
             compact_parts.append(f"{BOLD}{MAGENTA}{model}{RESET}")
-        if is_visible("line1", "context_bar") and is_visible("line1", "token_count"):
-            compact_parts.append(
-                f"{bar} {CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
-            )
-        elif is_visible("line1", "context_bar"):
+
+        # Context bar (line1)
+        if is_visible("line1", "context_bar"):
             compact_parts.append(f"{bar}")
-        elif is_visible("line1", "token_count"):
-            compact_parts.append(
-                f"{CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
-            )
-        if is_visible("line1", "sparkline") and sparkline_part:
-            compact_spark = build_sparkline(metrics["context_history"], width=10)
-            if compact_spark:
-                compact_parts.append(compact_spark)
-        if is_visible("line1", "cost"):
-            compact_parts.append(f"{YELLOW}{cost_str}{RESET}")
-        if is_visible("line1", "duration"):
-            compact_parts.append(f"{WHITE}{duration_str}{RESET}")
-        if is_visible("line2", "turns"):
-            compact_parts.append(
-                f"{CYAN}{metrics['turn_count']}{RESET} {dim}turns{RESET}"
-            )
-        if is_visible("line1", "compact_count"):
-            compact_parts.append(
-                f"{CYAN}{metrics['compact_count']}{RESET}{dim}x{RESET} compact"
-            )
-        if metrics["tool_errors"] > 0 and is_visible("line2", "errors"):
-            err_color = RED if metrics["tool_errors"] > 5 else ORANGE
-            compact_parts.append(f"{err_color}{metrics['tool_errors']}{RESET} {dim}err{RESET}")
-        if efficiency_part:
-            compact_parts.append(efficiency_part)
-        if api_status_str and is_visible("line2", "api_status"):
-            compact_parts.append(api_status_str)
+            if is_visible("line1", "token_count"):
+                compact_parts.append(
+                    f"{CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
+                )
+
+        # Usage bars (session + weekly) - fetch once
+        usage = None
+        if is_visible("line2", "usage") or is_visible("line3", "usage_weekly"):
+            usage = _fetch_usage()
+
+        # Session usage (line2)
+        if is_visible("line2", "usage") and usage:
+            usage_session_str = _format_usage_session(usage)
+            if usage_session_str:
+                compact_parts.append(usage_session_str)
+
+        # Weekly usage (line3)
+        if is_visible("line3", "usage_weekly") and usage:
+            usage_weekly_str = _format_usage_weekly(usage)
+            if usage_weekly_str:
+                compact_parts.append(usage_weekly_str)
+
         if compact_parts:
             print(f" {sep.join(compact_parts)}")
         return
@@ -1089,8 +1436,9 @@ def main():
     # ── Full mode: 3 lines ──
 
     # Widget: config takes precedence, then env var
-    widget_name = (get_setting("custom", "widget", default=None)
-                   or os.environ.get("STATUSLINE_WIDGET", "matrix"))
+    widget_name = get_setting("custom", "widget", default=None) or os.environ.get(
+        "STATUSLINE_WIDGET", "matrix"
+    )
     widget_fn = _load_widget(widget_name)
 
     line1_str = f" {sep.join(line1_parts)}" if line1_parts else ""
@@ -1109,8 +1457,11 @@ def main():
             print(_truncate(f"{line1_str}", term_cols_padded))
         if line2_str:
             print(_truncate(f"{line2_str}", term_cols_padded))
-        for extra_line in line3_lines:
-            print(_truncate(f"{extra_line}", term_cols_padded))
+        for i, extra_line in enumerate(line3_lines):
+            if i == 0:
+                print(_truncate(f"{extra_line}", term_cols_padded))
+            else:
+                print(_truncate(f"        {extra_line}", term_cols_padded))
 
 
 if __name__ == "__main__":

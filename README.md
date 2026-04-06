@@ -130,18 +130,24 @@ Customize behavior via `~/.claude/claudeui.json` (hot-reloads, no restart needed
 | `status.enabled` | `true`, `false` | `true` | Enable/disable Claude status page monitoring |
 | `status.ttl` | number (30–3600) | `120` | Cache time-to-live in seconds for status page polling |
 | `status.show_when_operational` | `true`, `false` | `false` | Show indicator even when all systems are operational |
+| `usage.enabled` | `true`, `false` | `true` | Enable/disable plan usage tracking |
+| `usage.rate_limit` | number (60+) | `60` | Minimum seconds between API requests |
 
 ## Tools
 
 ### [claude-code-statusline](./claude-code-statusline/)
 
-Real-time status bar for Claude Code with context sparkline, session cost, cache ratio, thinking count, live tool trace, and file edit tracking.
+Real-time status bar for Claude Code with context sparkline, session cost, cache ratio, thinking count, live tool trace, file edit tracking, and plan usage bars.
 
 ```
- 0110100 Opus 4.6 │ ████████░░░░░░░░░░░░ 42% 415.7k/1.0M │ ~24 turns left │ ▁▂▃▅▆▇↓▁▃▅ │ $2.34 │ 12m │ 0x compact │ #a1b2c3d4
- 1001011 ai-toolbox │ main +42 -17 │ 18 turns │ 5 files │ 0 err │ 82% cache │ 4x think │ ~$0.13/turn
- 0110010 read statusline.py → edit statusline.py → bash python3 → edit README.md │ statusline.py×3 README.md×1
+  0110100 Opus 4.6 │ ████████████████████ 42% 112k/1.0M │ ~24 turns left │ ▁▂▃▅▆▇↓▁▃▅ │ $2.34 │ 12m │ 0x compact │ #a1b2c3d4
+  1001011 ████████████████████ 15%  ↻ 2h   │ main +42 -17 │ 18 turns │ 5 files │ 0 err │ 82% cache │ 4x think │ ~$0.13/turn
+  0110010 ████████████████████ 73%w  ↻ 3h   │ read statusline.py → edit statusline.py → bash python3 → edit README.md │ statusline.py×3 README.md×1
 ```
+
+Line 1: Context bar (progress + percentage + tokens)  
+Line 2: Session usage bar (5-hour limit) + project telemetry  
+Line 3: Weekly usage bar + tool trace + file edits
 
 ### [claude-code-session-stats](./claude-code-session-stats/)
 

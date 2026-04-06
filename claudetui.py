@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
 """ClaudeTUI — unified CLI for Claude Code utilities."""
+
 import os
 import subprocess
 import sys
 
-_FALLBACK_VERSION = "0.6.1"
+_FALLBACK_VERSION = "0.7.0"
 
 
 def _get_version():
     """Get version from git tag (clone/dev), fall back to hardcoded (curl/brew)."""
     try:
-        v = subprocess.check_output(
-            ["git", "describe", "--tags", "--abbrev=0"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
-            stderr=subprocess.DEVNULL,
-        ).decode().strip().lstrip("v")
+        v = (
+            subprocess.check_output(
+                ["git", "describe", "--tags", "--abbrev=0"],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()
+            .lstrip("v")
+        )
         if v:
             return v
     except Exception:
@@ -49,21 +55,46 @@ def _stable_dir(d):
 SCRIPT_DIR = _stable_dir(_RAW_DIR)
 
 SUBCOMMANDS = {
-    "monitor":    ("python", "claude-code-monitor/monitor.py",                  "Live session dashboard"),
-    "chart":      ("python", "claude-code-monitor/monitor.py",                  "Context efficiency chart", ["--chart"]),
-    "stats":      ("python", "claude-code-session-stats/session-stats.py",       "Post-session analytics"),
-    "sessions":   ("python", "claude-code-session-manager/session-manager.py",   "Browse, compare, export sessions"),
-    "mode":       ("python", "claude-ui-mode.py",                                "Switch statusline mode (full/compact/custom)"),
-    "statusline": ("python", "claude-code-statusline/statusline.py",             "Run statusline (used by Claude Code)"),
-    "sniffer":    ("python", "claude-code-sniffer/sniffer.py",                    "API call interceptor proxy"),
-    "setup":      ("bash",   "install.sh",                                       "Configure statusline, hooks, and commands"),
-    "uninstall":  ("bash",   "uninstall.sh",                                     "Remove ClaudeTUI configuration"),
+    "monitor": ("python", "claude-code-monitor/monitor.py", "Live session dashboard"),
+    "chart": (
+        "python",
+        "claude-code-monitor/monitor.py",
+        "Context efficiency chart",
+        ["--chart"],
+    ),
+    "stats": (
+        "python",
+        "claude-code-session-stats/session-stats.py",
+        "Post-session analytics",
+    ),
+    "sessions": (
+        "python",
+        "claude-code-session-manager/session-manager.py",
+        "Browse, compare, export sessions",
+    ),
+    "mode": (
+        "python",
+        "claude-ui-mode.py",
+        "Switch statusline mode (full/compact/custom)",
+    ),
+    "statusline": (
+        "python",
+        "claude-code-statusline/statusline.py",
+        "Run statusline (used by Claude Code)",
+    ),
+    "sniffer": (
+        "python",
+        "claude-code-sniffer/sniffer.py",
+        "API call interceptor proxy",
+    ),
+    "setup": ("bash", "install.sh", "Configure statusline, hooks, and commands"),
+    "uninstall": ("bash", "uninstall.sh", "Remove ClaudeTUI configuration"),
 }
 
 HOOKS = {
     "session-heatmap": "claude-code-hooks/session-heatmap.py",
-    "pre-edit-churn":  "claude-code-hooks/pre-edit-churn.py",
-    "post-edit-deps":  "claude-code-hooks/post-edit-deps.py",
+    "pre-edit-churn": "claude-code-hooks/pre-edit-churn.py",
+    "post-edit-deps": "claude-code-hooks/post-edit-deps.py",
 }
 
 HELP = """\
@@ -141,22 +172,21 @@ def main():
             sniff_port = args[1]
             claude_args = args[2:]
 
-        port_dir = os.path.join(
-            os.path.expanduser("~"), ".claude", "api-sniffer"
-        )
+        port_dir = os.path.join(os.path.expanduser("~"), ".claude", "api-sniffer")
 
         if sniff_port:
             # User specified a port — verify sniffer is running
             port_file = os.path.join(port_dir, f".port.{sniff_port}")
             if not os.path.exists(port_file):
-                print(f"  Sniffer not found on port {sniff_port} — starting claude without proxy")
+                print(
+                    f"  Sniffer not found on port {sniff_port} — starting claude without proxy"
+                )
                 sniff_port = None
         else:
             # Auto-detect: find any running sniffer
             try:
                 port_files = sorted(
-                    f for f in os.listdir(port_dir)
-                    if f.startswith(".port.")
+                    f for f in os.listdir(port_dir) if f.startswith(".port.")
                 )
             except FileNotFoundError:
                 port_files = []

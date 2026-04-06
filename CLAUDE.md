@@ -114,6 +114,17 @@ Claude Code hooks for automatic in-session context. Three hook scripts:
 - Monitor: same indicator in header line; `i` hotkey opens detailed status overlay with all components + incidents
 - Fetcher is inlined in both statusline.py and monitor.py (same convention as MODEL_PRICING etc.)
 
+### Plan Usage Integration
+
+- API: OAuth usage endpoint at `https://api.anthropic.com/api/oauth/usage` (requires OAuth token)
+- Token sources: `CLAUDE_CODE_OAUTH_TOKEN` env, `~/.claude/.credentials.json` (`claudeAiOauth.accessToken`), macOS Keychain
+- Cache: `~/.claude/usage-cache.json` with configurable rate limit (default 60s)
+- Settings: `usage.enabled` (default: true), `usage.rate_limit` (seconds, default: 60)
+- Line 2: session usage bar (5-hour limit) with progress, percentage, and reset time
+- Line 3: weekly usage bar with progress, percentage, "w" suffix, and reset time
+- Fixed width formatting to prevent line jumping
+- Color coding: green (<60%), yellow (60-85%), orange (85-95%), red (>=95%)
+
 ## Testing
 
 ```bash

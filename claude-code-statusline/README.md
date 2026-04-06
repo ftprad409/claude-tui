@@ -3,15 +3,21 @@
 A lightweight Python script that adds a real-time context window usage indicator to [Claude Code](https://docs.anthropic.com/en/docs/claude-code)'s status line.
 
 ```
- 0110100 Opus 4.6 │ ████████░░░░░░░░░░░░ 42% 65.5k/200.0k │ ~24 turns left │ ▁▂▃▅▆▇↓▁▃▅ │ $2.34 │ 12m │ 0x compact │ #a1b2c3d4
- 1001011 ai-toolbox │ main +42 -17 │ 18 turns │ 5 files │ 0 err │ 82% cache │ 4x think │ ~$0.13/turn
- 0110010 read statusline.py → edit statusline.py → bash python3 → edit README.md │ statusline.py×3 README.md×1
+ 0110100 Opus 4.6 │ ████████████████████ 42% 112k/1.0M │ ~24 turns left │ ▁▂▃▅▆▇↓▁▃▅ │ $2.34 │ 12m │ 0x compact │ #a1b2c3d4
+ 1001011 ████████████████████ 15%  ↻ 2h   │ main +42 -17 │ 18 turns │ 5 files │ 0 err │ 82% cache │ 4x think │ ~$0.13/turn
+ 0110010 ████████████████████ 73%w  ↻ 3h   │ read statusline.py → edit statusline.py → bash python3 → edit README.md │ statusline.py×3 README.md×1
 ```
+
+Three-line layout:
+
+- **Line 1** — context bar (progress + tokens), model, sparkline, cost, duration, compactions, session ID
+- **Line 2** — session usage bar (5-hour limit), then project telemetry: git branch, turns, files, errors, cache, thinking, cost/turn
+- **Line 3** — weekly usage bar, then tool trace + file edits
 
 Two modes available — **full** (3-line, default) and **compact** (1-line):
 
 ```
- Opus 4.6 │ ████████░░░░░░░░░░░░ 73% 145.4k/200.0k │ $215.63 │ 13h 01m │ 218 turns │ 5xcompact
+ Opus 4.6 │ ████████░░░░░░░░░░░ 73% 145.4k/200.0k │ $215.63 │ 13h 01m │ 218 turns │ 5xcompact
 ```
 
 Switch anytime: `claudetui mode compact` / `claudetui mode full` (restart Claude Code after).
@@ -19,13 +25,15 @@ Switch anytime: `claudetui mode compact` / `claudetui mode full` (restart Claude
 Full mode — three-line layout with Matrix binary rain animation on the left:
 
 - **Matrix rain** — animated 3×7 binary rain with true RGB Matrix colors (`#003B00` dark trail, `#03A062` classic green, `#00FF41` bright phosphor). Each character keeps its color as it falls down. Advances one frame per tool call.
-- **Line 1** — session core: model, context bar, sparkline, cost, duration, compactions, compaction prediction, session ID
-- **Line 2** — project telemetry: directory, git branch + diff, turns, files, errors, cache ratio, thinking count, cost/turn, agents
-- **Line 3** — live activity trace: recent tool calls (`r»read`, `e»edit`, `b»bash`) and file edit counts (shown only during active turns)
+- **Line 1** — context bar (progress + percentage + tokens), model, sparkline, cost, duration, compactions, compaction prediction, session ID
+- **Line 2** — session usage bar (5-hour limit, progress + percentage + reset time), then project telemetry: git branch, turns, files, errors, cache ratio, thinking count, cost/turn, agents
+- **Line 3** — weekly usage bar (progress + percentage + "w" + reset time), then tool trace + file edits
 
 ## Features
 
 - **Context usage** — progress bar with color coding (green → yellow → orange → red)
+- **Session usage** — 5-hour session limit progress bar with percentage and reset time
+- **Weekly usage** — weekly plan limit progress bar with percentage, "w" suffix, and reset time
 - **Per-turn token sparkline** — shows output tokens per turn (scaled to peak); recent turns at full resolution, compactions marked with `↓`
 - **Session cost** — estimated USD cost based on model pricing (input, cache read, output tokens)
 - **Cost per turn** — average cost per conversation turn
