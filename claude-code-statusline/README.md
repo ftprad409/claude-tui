@@ -1,5 +1,9 @@
 # Claude Code Status Line — Context Window Monitor
 
+![Compact mode](../assets/statusline-compact.png)
+
+To run in compact mode, select it with `claudetui mode compact`.
+
 A lightweight Python script that adds a real-time context window usage indicator to [Claude Code](https://docs.anthropic.com/en/docs/claude-code)'s status line.
 
 ```

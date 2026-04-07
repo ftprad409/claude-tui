@@ -117,8 +117,25 @@ def show_current():
             f"  {RED}\u2717{RESET} No statusline configured. Run claudetui setup first."
         )
         return
-    mode = "compact" if "--compact" in cmd else "full"
-    print(f"  Current mode: {BOLD}{CYAN}{mode}{RESET}")
+
+    # Check mode flags
+    if "--compact" in cmd:
+        print(f"  Current mode: {BOLD}{CYAN}compact{RESET}")
+    else:
+        # Check if custom components configured
+        cfg = load_config()
+        custom = cfg.get("custom", {})
+        has_custom = (
+            any(custom.get("line1", {}).values())
+            or any(custom.get("line2", {}).values())
+            or any(custom.get("line3", {}).values())
+        )
+
+        if has_custom:
+            print(f"  Current mode: {BOLD}{CYAN}custom{RESET}")
+        else:
+            print(f"  Current mode: {BOLD}{CYAN}full{RESET}")
+
     print()
     print(f"  {DIM}Run claudetui mode --help for usage info{RESET}")
 
@@ -133,7 +150,17 @@ def set_mode(mode):
         sys.exit(1)
 
     base_cmd = current_cmd.replace(" --compact", "").strip()
-    cmd = f"{base_cmd} --compact" if mode == "compact" else base_cmd
+
+    if mode == "compact":
+        cmd = f"{base_cmd} --compact"
+    elif mode == "full":
+        cmd = base_cmd
+    elif mode == "custom":
+        # Custom mode is just full without --compact, but keeps custom config
+        cmd = base_cmd
+    else:
+        print(f"  {RED}\u2717{RESET} Unknown mode: {mode}")
+        sys.exit(1)
 
     settings["statusLine"] = {"type": "command", "command": cmd}
     save_settings(settings)
@@ -828,6 +855,14 @@ def main():
     elif cmd == "compact":
         set_mode("compact")
     elif cmd == "custom":
+        # Remove --compact flag if present, then launch custom configurator
+        settings = load_settings()
+        current_cmd = settings.get("statusLine", {}).get("command", "")
+        if current_cmd and "--compact" in current_cmd:
+            base_cmd = current_cmd.replace(" --compact", "").strip()
+            settings["statusLine"] = {"type": "command", "command": base_cmd}
+            save_settings(settings)
+            print(f"  {DIM}Removed compact flag for custom mode{RESET}")
         cmd_custom(args[1:])
     else:
         print(f"  {RED}\u2717{RESET} Unknown command: {cmd}")

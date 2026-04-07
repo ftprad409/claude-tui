@@ -13,6 +13,12 @@ Real-time dashboard, statusline, API interceptor, and analytics for Claude Code 
 
 **Website:** [slima4.github.io/claude-tui](https://slima4.github.io/claude-tui/)
 
+**Statusline (compact mode)** — single line with essentials:
+To use compact mode: `claudetui mode compact`
+
+![Statusline Compact](assets/statusline-compact.png)
+
+
 **Statusline** — context, cost, sparkline, and live tool trace right inside Claude Code:
 
 ![Statusline](assets/statusline-demo.png)

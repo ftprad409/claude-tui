@@ -26,6 +26,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from typing import TypedDict
 
 # Constants
 _CLAUDE_DIR = ".claude"
@@ -615,7 +616,7 @@ def _fetch_usage():
 
 
 def _format_reset_time(iso_time: str) -> str:
-    """Format ISO reset time to short duration like '2h' or '30m'."""
+    """Format ISO reset time to compact duration like '2h30m' or '30m'."""
     if not iso_time:
         return ""
     try:
@@ -629,7 +630,7 @@ def _format_reset_time(iso_time: str) -> str:
         hours = int(diff // 3600)
         mins = int((diff % 3600) // 60)
         if hours > 0:
-            return f"{hours}h"
+            return f"{hours}h{mins:02d}m"
         else:
             return f"{mins}m"
     except Exception:
@@ -639,7 +640,7 @@ def _format_reset_time(iso_time: str) -> str:
 def _format_usage_session(usage_data: dict | None, length: int = 20) -> str:
     """Format session (5-hour) usage for line 2.
 
-    Returns string like "████████████████████ 15%  ↻ 2h  " or empty if no data.
+    Returns string like "████████████████████ 15%  ↻ 2h30m" or empty if no data.
     Fixed width for consistent display - no line jumping.
     """
     if not usage_data:
@@ -667,9 +668,9 @@ def _format_usage_session(usage_data: dict | None, length: int = 20) -> str:
     reset = _format_reset_time(five_hour.get("resets_at", ""))
     reset_str = f" \u21bb {reset}" if reset else ""
 
-    # Pad to fixed width for consistent display (bar=20 + pct=4 + reset=6 = 30)
+    # Pad to fixed width for consistent display (bar=20 + pct=4 + reset=7 = 31)
     pct_str = f"{color}{pct_int:>3}%{RESET}"
-    reset_str = reset_str.ljust(6)  # max " ↻ 99h" = 6 chars
+    reset_str = reset_str.ljust(7)  # max " ↻ 23h59m" = 7 chars
 
     return f"{bar} {pct_str} {reset_str}"
 
@@ -702,12 +703,12 @@ def _format_usage_weekly(usage_data: dict | None, length: int = 20) -> str:
         + f"{RESET}"
     )
     pct_int = int(pct)
-    reset = _format_reset_time(seven_day.get("resets_at", ""))
+    reset = _format_reset_time(five_hour.get("resets_at", ""))
     reset_str = f" \u21bb {reset}" if reset else ""
 
-    # Pad to fixed width for consistent display (bar=20 + pct=5 + reset=6 = 31)
-    pct_str = f"{color}{pct_int:>3}%{RESET}{GRAY}w{RESET}"
-    reset_str = reset_str.ljust(6)  # max " ↻ 99h" = 6 chars
+    # Pad to fixed width for consistent display (bar=20 + pct=4 + reset=7 = 31)
+    pct_str = f"{color}{pct_int:>3}%{RESET}"
+    reset_str = reset_str.ljust(7)  # max " ↻ 23h59m" = 7 chars
 
     return f"{bar} {pct_str} {reset_str}"
 
@@ -720,26 +721,6 @@ def _format_usage_weekly(usage_data, length=20):
     """
     if not usage_data:
         return ""
-
-    def format_reset(iso_time):
-        if not iso_time:
-            return ""
-        try:
-            from datetime import datetime
-
-            reset_dt = datetime.fromisoformat(iso_time.replace("Z", "+00:00"))
-            now_dt = datetime.now(reset_dt.tzinfo)
-            diff = (reset_dt - now_dt).total_seconds()
-            if diff <= 0:
-                return ""
-            hours = int(diff // 3600)
-            mins = int((diff % 3600) // 60)
-            if hours > 0:
-                return f"{hours}h"
-            else:
-                return f"{mins}m"
-        except Exception:
-            return ""
 
     seven_day = usage_data.get("seven_day", {})
     if not seven_day:
@@ -760,12 +741,12 @@ def _format_usage_weekly(usage_data, length=20):
         + f"{RESET}"
     )
     pct_int = int(pct)
-    reset = format_reset(seven_day.get("resets_at"))
+    reset = _format_reset_time(seven_day.get("resets_at", ""))
     reset_str = f" \u21bb {reset}" if reset else ""
 
-    # Pad to fixed width for consistent display (bar=20 + pct=5 + reset=6 = 31)
+    # Pad to fixed width for consistent display (bar=20 + pct=5 + reset=7 = 32)
     pct_str = f"{color}{pct_int:>3}%{RESET}{GRAY}w{RESET}"
-    reset_str = reset_str.ljust(6)  # max " ↻ 99h" = 6 chars
+    reset_str = reset_str.ljust(7)  # max " ↻ 23h59m" = 7 chars
 
     return f"{bar} {pct_str} {reset_str}"
 
@@ -1194,40 +1175,53 @@ def build_progress_bar(ratio, length=20, compact_ratio=None):
     return f"{bar} {pct_str}"
 
 
-def main():
-    compact_mode = "--compact" in sys.argv
+# Constants
+_CLAUDE_DIR = ".claude"
+APPLICATION_JSON = "application/json"
 
-    try:
-        data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        print("statusline: no data")
-        return
+# Default colors (can be overridden)
+DIM = "\033[90m"
 
-    model = data.get("model", {}).get("display_name", "unknown")
-    model_id = data.get("model", {}).get("id", "")
-    cwd = os.path.basename(data.get("workspace", {}).get("current_dir", ""))
-    transcript_path = data.get("transcript_path", "")
-    session_id = data.get("session_id", "")[:8]
 
-    # Resolve context window size from model
-    context_limit = get_context_limit(model_id)
+class InputData(TypedDict):
+    model: str
+    model_id: str
+    cwd: str
+    transcript_path: str
+    session_id: str
 
-    # Parse transcript for all metrics
-    metrics = parse_transcript(transcript_path, context_limit=context_limit)
 
-    # Context usage bar
-    ctx_used = metrics["context_tokens"]
+class ContextMetrics(TypedDict):
+    ratio: float
+    compact_ratio: float
+
+
+def parse_input_data(data: dict) -> InputData:
+    """Extract basic session data from input."""
+    return {
+        "model": data.get("model", {}).get("display_name", "unknown"),
+        "model_id": data.get("model", {}).get("id", ""),
+        "cwd": os.path.basename(data.get("workspace", {}).get("current_dir", "")),
+        "transcript_path": data.get("transcript_path", ""),
+        "session_id": data.get("session_id", "")[:8],
+    }
+
+
+def calculate_context_metrics(ctx_used: int, context_limit: int) -> ContextMetrics:
+    """Calculate context usage metrics."""
     ratio = ctx_used / context_limit if context_limit > 0 else 0
     compact_ratio = (
         (context_limit - COMPACT_BUFFER) / context_limit if context_limit > 0 else 0.83
     )
-    bar = build_progress_bar(ratio, compact_ratio=compact_ratio)
-    tokens_str = format_tokens(int(ctx_used))
-    limit_str = format_tokens(context_limit)
+    return {
+        "ratio": ratio,
+        "compact_ratio": compact_ratio,
+    }
 
-    # Session cost
-    pricing = get_model_pricing(model_id)
-    cost = (
+
+def calculate_session_cost(metrics: dict, pricing: dict) -> float:
+    """Calculate total session cost."""
+    return (
         metrics["input_tokens_total"] * pricing["input"] / 1_000_000
         + metrics["cache_read_tokens_total"] * pricing["cache_read"] / 1_000_000
         + metrics["cache_creation_tokens_total"]
@@ -1235,21 +1229,10 @@ def main():
         / 1_000_000
         + metrics["output_tokens_total"] * pricing["output"] / 1_000_000
     )
-    cost_str = format_cost(cost)
 
-    # Session duration
-    duration_str = format_duration(metrics["session_start"])
 
-    # Git branch + diff
-    branch = get_git_branch()
-    diff_stat = get_git_diff_stat()
-    branch_part = ""
-    if branch:
-        branch_part = f"{GREEN}\u2387 {branch}{RESET}"
-        if diff_stat:
-            branch_part += f" {diff_stat}"
-
-    # Cache hit ratio
+def calculate_cache_ratio(metrics: dict) -> tuple:
+    """Calculate cache hit ratio and color."""
     total_input = metrics["input_tokens_total"] + metrics["cache_read_tokens_total"]
     if total_input > 0:
         cache_ratio = metrics["cache_read_tokens_total"] / total_input
@@ -1260,273 +1243,431 @@ def main():
             cache_color = YELLOW
         else:
             cache_color = ORANGE
-        cache_part = f"{cache_color}{cache_pct}%{RESET} cache"
+        return cache_pct, cache_color
+    return 0, GRAY
+
+
+def format_cache_part(cache_pct: int, cache_color: str) -> str:
+    """Format cache hit percentage string."""
+    if cache_pct > 0:
+        return f"{cache_color}{cache_pct}%{RESET} cache"
+    return f"{GRAY}0%{RESET} cache"
+
+
+def format_git_branch(branch: str, diff_stat: str) -> str:
+    """Format git branch with optional diff stats."""
+    if not branch:
+        return ""
+    branch_part = f"{GREEN}\u2387 {branch}{RESET}"
+    if diff_stat:
+        branch_part += f" {diff_stat}"
+    return branch_part
+
+
+def calculate_cost_per_turn(cost: float, turn_count: int) -> str:
+    """Format cost per turn string."""
+    if turn_count > 0:
+        cpt = cost / turn_count
+        return f"{GRAY}~{format_cost(cpt)}/turn{RESET}"
+    return ""
+
+
+def calculate_compaction_prediction(
+    ctx_used: int, context_limit: int, turns_since: int, metrics: dict, ratio: float
+) -> str:
+    """Calculate compaction prediction."""
+    if turns_since < 2 or ratio <= 0 or ratio >= 1.0:
+        return ""
+
+    compact_ceiling = context_limit - COMPACT_BUFFER
+    env_pct = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
+    if env_pct.isdigit() and 1 <= int(env_pct) <= 100:
+        compact_ceiling = min(compact_ceiling, context_limit * int(env_pct) / 100)
+
+    remaining_tokens = compact_ceiling - ctx_used
+    turn_contexts = [ctx for _, ctx in metrics["context_per_turn"]]
+
+    if len(turn_contexts) >= 3:
+        deltas = [
+            turn_contexts[i] - turn_contexts[i - 1]
+            for i in range(1, len(turn_contexts))
+            if turn_contexts[i] > turn_contexts[i - 1]
+        ]
+        if deltas:
+            alpha = 2 / (min(len(deltas), 5) + 1)
+            ema = deltas[0]
+            for d in deltas[1:]:
+                ema = alpha * d + (1 - alpha) * ema
+            growth_per_turn = ema
+        else:
+            growth_per_turn = 0
     else:
-        cache_part = f"{GRAY}0%{RESET} cache"
+        baseline = metrics["context_at_last_compact"]
+        growth_since = ctx_used - baseline if baseline > 0 else ctx_used
+        growth_per_turn = growth_since / max(turns_since, 1)
 
-    # Sub-agents (used as guard for line2 visibility)
-    has_subagents = metrics["subagent_count"] > 0
+    if growth_per_turn <= 0 or remaining_tokens <= 0:
+        return ""
 
-    # Cost per turn
-    cost_per_turn = ""
-    if metrics["turn_count"] > 0:
-        cpt = cost / metrics["turn_count"]
-        cost_per_turn = f"{GRAY}~{format_cost(cpt)}/turn{RESET}"
+    turns_left = int(remaining_tokens / growth_per_turn)
+    if turns_left <= 5:
+        pred_color = RED
+    elif turns_left <= 15:
+        pred_color = ORANGE
+    elif turns_left <= 30:
+        pred_color = YELLOW
+    else:
+        pred_color = GREEN
 
-    # Per-turn token spend sparkline (relative to peak)
-    sparkline_part = build_sparkline(metrics["context_history"])
+    return f"{pred_color}~{turns_left}{RESET} {GRAY}turns left{RESET}"
 
-    # Compaction prediction (turns remaining until auto-compaction)
-    # Uses EMA (exponential moving average) for recent-weighted growth rate
-    compact_prediction = ""
-    turns_since = metrics["turns_since_compact"]
-    if turns_since >= 2 and ratio > 0 and ratio < 1.0:
-        # Fixed buffer model: compaction fires when remaining < COMPACT_BUFFER
-        # CLAUDE_AUTOCOMPACT_PCT_OVERRIDE can lower the ceiling further
-        compact_ceiling = context_limit - COMPACT_BUFFER
-        env_pct = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
-        if env_pct.isdigit() and 1 <= int(env_pct) <= 100:
-            compact_ceiling = min(compact_ceiling, context_limit * int(env_pct) / 100)
-        remaining_tokens = compact_ceiling - ctx_used
 
-        # Compute growth rate using EMA on per-turn context deltas
-        turn_contexts = [ctx for _, ctx in metrics["context_per_turn"]]
-        if len(turn_contexts) >= 3:
-            deltas = [
-                turn_contexts[i] - turn_contexts[i - 1]
-                for i in range(1, len(turn_contexts))
-                if turn_contexts[i] > turn_contexts[i - 1]
-            ]
-            if deltas:
-                alpha = 2 / (min(len(deltas), 5) + 1)
-                ema = deltas[0]
-                for d in deltas[1:]:
-                    ema = alpha * d + (1 - alpha) * ema
-                growth_per_turn = ema
-            else:
-                growth_per_turn = 0
+def calculate_efficiency(metrics: dict, ctx_used: int) -> str:
+    """Calculate and format efficiency score."""
+    total_built = metrics["total_context_built"] + ctx_used
+    if total_built <= 0 or not is_visible("line1", "efficiency"):
+        return ""
+
+    wasted = metrics["tokens_wasted"]
+    eff = max(0, 1 - wasted / total_built) if wasted > 0 else 1.0
+    eff_pct = int(eff * 100)
+
+    if eff_pct >= 90:
+        eff_color = GREEN
+    elif eff_pct >= 70:
+        eff_color = YELLOW
+    elif eff_pct >= 50:
+        eff_color = ORANGE
+    else:
+        eff_color = RED
+
+    return f"{eff_color}{eff_pct}%{RESET} {GRAY}eff{RESET}"
+
+
+def format_tool_trail(recent_tools: list[str]) -> list[str]:
+    """Format recent tool calls as trail items."""
+    if not recent_tools:
+        return []
+    items = []
+    for t in recent_tools[-6:]:
+        p = t.split()
+        if len(p) >= 2:
+            items.append(f"{GRAY}{p[0].lower()}{RESET} {GREEN}{p[-1]}{RESET}")
         else:
-            # Fallback to simple average when not enough data
-            baseline = metrics["context_at_last_compact"]
-            growth_since = ctx_used - baseline if baseline > 0 else ctx_used
-            growth_per_turn = growth_since / max(turns_since, 1)
+            items.append(f"{GRAY}{p[0].lower()}{RESET}")
+    return items
 
-        if growth_per_turn > 0 and remaining_tokens > 0:
-            turns_left = int(remaining_tokens / growth_per_turn)
-            if turns_left <= 5:
-                pred_color = RED
-            elif turns_left <= 15:
-                pred_color = ORANGE
-            elif turns_left <= 30:
-                pred_color = YELLOW
-            else:
-                pred_color = GREEN
-            compact_prediction = (
-                f"{pred_color}~{turns_left}{RESET} {GRAY}turns left{RESET}"
-            )
 
-    # Context efficiency score
-    efficiency_part = ""
-    total_built = metrics["total_context_built"] + ctx_used  # all segments + current
-    if is_visible("line1", "efficiency") and total_built > 0:
-        wasted = metrics["tokens_wasted"]
-        eff = max(0, 1 - wasted / total_built) if wasted > 0 else 1.0
-        eff_pct = int(eff * 100)
-        if eff_pct >= 90:
-            eff_color = GREEN
-        elif eff_pct >= 70:
-            eff_color = YELLOW
-        elif eff_pct >= 50:
-            eff_color = ORANGE
+def format_file_edits(file_edits: dict) -> list[str]:
+    """Format file edits as colored parts."""
+    if not file_edits:
+        return []
+    top = sorted(file_edits.items(), key=lambda x: -x[1])[:3]
+    return [f"{YELLOW}{n}{RESET}{GRAY}×{c}{RESET}" for n, c in top]
+
+
+def wrap_line_parts(
+    items: list[str], file_edit_parts: list[str], max_width: int
+) -> list[str]:
+    """Wrap trail items and file edits across lines based on terminal width."""
+    if not items and not file_edit_parts:
+        return []
+
+    lines = []
+    arrow = f" {GRAY}\u2192{RESET} "
+    arrow_vis = 3
+    cur_line = []
+    cur_width = 1
+
+    for item in items:
+        item_width = _visible_len(item)
+        joiner = arrow_vis if cur_line else 0
+        if cur_line and cur_width + joiner + item_width > max_width:
+            lines.append(f" {arrow.join(cur_line)}")
+            cur_line = [item]
+            cur_width = 1 + item_width
         else:
-            eff_color = RED
-        efficiency_part = f"{eff_color}{eff_pct}%{RESET} {GRAY}eff{RESET}"
+            cur_line.append(item)
+            cur_width += joiner + item_width
 
-    # Claude API status (fetched once, used by both full and compact modes)
-    api_status_str = ""
-    if is_visible("line2", "api_status"):
-        api_status = _fetch_api_status()
-        api_status_str = _format_api_status(api_status)
+    if cur_line:
+        tail = arrow.join(cur_line)
+        if file_edit_parts:
+            edit_str = " ".join(file_edit_parts)
+            edit_width = _visible_len(edit_str)
+            sep_width = 1
+            if cur_width + sep_width + edit_width <= max_width:
+                tail += f" {GRAY}\u22ee{RESET}{edit_str}"
+            else:
+                lines.append(f" {tail}")
+                tail = f" {edit_str}"
+        lines.append(f" {tail}")
+    elif file_edit_parts:
+        lines.append(f" {' '.join(file_edit_parts)}")
 
+    return lines
+
+
+def calculate_terminal_width(buffer: int = 30, widget_offset: int = 10) -> int:
+    """Calculate max width for line wrapping."""
+    term_cols = _get_terminal_cols()
+    return term_cols - buffer - widget_offset
+
+
+def build_line1_parts(
+    bar: str,
+    tokens_str: str,
+    limit_str: str,
+    compact_prediction: str,
+    model: str,
+    sparkline_part: str,
+    cost_str: str,
+    duration_str: str,
+    metrics: dict,
+    efficiency_part: str,
+    session_id: str,
+) -> list[str]:
+    """Build line 1 parts list."""
+    parts = []
     dim = GRAY
-    sep = f" {dim}\u22ee{RESET} "
-
-    # Line 1: session core - context_bar first, then other components
-    line1_parts = []
     if is_visible("line1", "context_bar"):
-        ctx_part = f"{bar}"
+        ctx = f"{bar}"
         if is_visible("line1", "token_count"):
-            ctx_part += (
-                f" {CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
-            )
+            ctx += f" {CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
         if compact_prediction and is_visible("line1", "compact_prediction"):
-            ctx_part += f" {dim}\u22ee{RESET} {compact_prediction}"
-        line1_parts.append(ctx_part)
+            ctx += f" {dim}\u22ee{RESET} {compact_prediction}"
+        parts.append(ctx)
     elif is_visible("line1", "token_count"):
-        ctx_part = f"{CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
+        ctx = f"{CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
         if compact_prediction and is_visible("line1", "compact_prediction"):
-            ctx_part += f" {dim}\u22ee{RESET} {compact_prediction}"
-        line1_parts.append(ctx_part)
+            ctx += f" {dim}\u22ee{RESET} {compact_prediction}"
+        parts.append(ctx)
     elif compact_prediction and is_visible("line1", "compact_prediction"):
-        line1_parts.append(compact_prediction)
+        parts.append(compact_prediction)
+
     if is_visible("line1", "model"):
-        line1_parts.append(f"{BOLD}{MAGENTA}{model}{RESET}")
+        parts.append(f"{BOLD}{MAGENTA}{model}{RESET}")
     if sparkline_part and is_visible("line1", "sparkline"):
-        line1_parts.append(sparkline_part)
+        parts.append(sparkline_part)
     if is_visible("line1", "cost"):
-        line1_parts.append(f"{YELLOW}{cost_str}{RESET}")
+        parts.append(f"{YELLOW}{cost_str}{RESET}")
     if is_visible("line1", "duration"):
-        line1_parts.append(f"{WHITE}{duration_str}{RESET}")
+        parts.append(f"{WHITE}{duration_str}{RESET}")
     if is_visible("line1", "compact_count"):
-        line1_parts.append(
-            f"{CYAN}{metrics['compact_count']}{RESET}{dim}x{RESET} compact"
-        )
+        parts.append(f"{CYAN}{metrics['compact_count']}{RESET}{dim}x{RESET} compact")
     if efficiency_part:
-        line1_parts.append(efficiency_part)
+        parts.append(efficiency_part)
     if is_visible("line1", "session_id"):
-        line1_parts.append(f"{dim}#{RESET}{GRAY}{session_id}{RESET}")
+        parts.append(f"{dim}#{RESET}{GRAY}{session_id}{RESET}")
+    return parts
 
-    # Line 2: project telemetry - usage first, then other components
-    line2_parts = []
 
-    # Usage bar (session 5-hour) - first position
+def build_line2_parts(
+    usage: dict | None,
+    cwd: str,
+    branch_part: str,
+    metrics: dict,
+    cache_part: str,
+    cost_per_turn: str,
+    api_status_str: str,
+) -> list[str]:
+    """Build line 2 parts list."""
+    parts = []
+    dim = GRAY
     if is_visible("line2", "usage"):
-        usage = _fetch_usage()
-        usage_session_str = _format_usage_session(usage)
-        if usage_session_str:
-            line2_parts.append(usage_session_str)
+        usage_str = _format_usage_session(usage)
+        if usage_str:
+            parts.append(usage_str)
 
     if is_visible("line2", "cwd"):
-        line2_parts.append(f"{GREEN}{cwd}{RESET}")
+        parts.append(f"{GREEN}{cwd}{RESET}")
     if branch_part and is_visible("line2", "git_branch"):
-        line2_parts.append(branch_part)
+        parts.append(branch_part)
     if is_visible("line2", "turns"):
-        line2_parts.append(f"{CYAN}{metrics['turn_count']}{RESET} {dim}turns{RESET}")
+        parts.append(f"{CYAN}{metrics['turn_count']}{RESET} {dim}turns{RESET}")
     if is_visible("line2", "files"):
-        line2_parts.append(
-            f"{CYAN}{len(metrics['files_touched'])}{RESET} {dim}files{RESET}"
-        )
+        parts.append(f"{CYAN}{len(metrics['files_touched'])}{RESET} {dim}files{RESET}")
+
     if is_visible("line2", "errors"):
         if metrics["tool_errors"] > 0:
             err_color = RED if metrics["tool_errors"] > 5 else ORANGE
-            line2_parts.append(
-                f"{err_color}{metrics['tool_errors']}{RESET} {dim}err{RESET}"
-            )
+            parts.append(f"{err_color}{metrics['tool_errors']}{RESET} {dim}err{RESET}")
         else:
-            line2_parts.append(f"{GREEN}0{RESET} {dim}err{RESET}")
+            parts.append(f"{GREEN}0{RESET} {dim}err{RESET}")
+
     if is_visible("line2", "cache"):
-        line2_parts.append(f"{cache_part.split(' ')[0]} {dim}cache{RESET}")
+        parts.append(f"{cache_part.split(' ')[0]} {dim}cache{RESET}")
     if metrics["thinking_count"] > 0 and is_visible("line2", "thinking"):
-        line2_parts.append(
+        parts.append(
             f"{MAGENTA}{metrics['thinking_count']}{RESET}{dim}x{RESET} {dim}think{RESET}"
         )
     if cost_per_turn and is_visible("line2", "cost_per_turn"):
-        line2_parts.append(cost_per_turn)
-    if has_subagents and is_visible("line2", "agents"):
-        line2_parts.append(
-            f"{CYAN}{metrics['subagent_count']}{RESET} {dim}agents{RESET}"
-        )
-
+        parts.append(cost_per_turn)
+    if metrics["subagent_count"] > 0 and is_visible("line2", "agents"):
+        parts.append(f"{CYAN}{metrics['subagent_count']}{RESET} {dim}agents{RESET}")
     if api_status_str and is_visible("line2", "api_status"):
-        line2_parts.append(api_status_str)
+        parts.append(api_status_str)
+    return parts
 
-    # Line 3+: live activity trace (wraps to extra lines if needed)
-    line3_lines = []
 
-    # Weekly usage - line 3, first position (with separator)
+def build_line3_parts(usage: dict | None, metrics: dict) -> list[str]:
+    """Build line 3 parts list."""
+    lines = []
     if is_visible("line3", "usage_weekly"):
+        weekly_str = _format_usage_weekly(usage)
+        if weekly_str:
+            lines.append(weekly_str)
+
+    trail_items = format_tool_trail(metrics.get("recent_tools"))
+    file_edit_parts = format_file_edits(metrics.get("current_turn_file_edits"))
+
+    max_width = calculate_terminal_width()
+    wrapped = wrap_line_parts(trail_items, file_edit_parts, max_width)
+    lines.extend(wrapped)
+    return lines
+
+
+def build_compact_line(
+    model: str,
+    bar: str,
+    tokens_str: str,
+    limit_str: str,
+    usage: dict | None,
+) -> str:
+    """Build compact mode single line."""
+    parts = []
+    if is_visible("line1", "model"):
+        parts.append(f"{BOLD}{MAGENTA}{model}{RESET}")
+    if is_visible("line1", "context_bar"):
+        parts.append(f"{bar}")
+        if is_visible("line1", "token_count"):
+            parts.append(
+                f"{CYAN}{tokens_str}{RESET}{GRAY}/{RESET}{GRAY}{limit_str}{RESET}"
+            )
+
+    if usage:
+        session_str = _format_usage_session(usage)
+        if session_str:
+            parts.append(session_str)
+        weekly_str = _format_usage_weekly(usage)
+        if weekly_str:
+            parts.append(weekly_str)
+
+    sep = f" {GRAY}\u22ee{RESET} "
+    return sep.join(parts) if parts else ""
+
+
+def main():
+    compact_mode = "--compact" in sys.argv
+
+    try:
+        data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        print("statusline: no data")
+        return
+
+    # Extract basic data
+    basic = parse_input_data(data)
+    model, model_id, cwd, session_id = (
+        basic["model"],
+        basic["model_id"],
+        basic["cwd"],
+        basic["session_id"],
+    )
+
+    # Parse transcript for metrics
+    context_limit = get_context_limit(model_id)
+    metrics = parse_transcript(
+        transcript_path=basic["transcript_path"], context_limit=context_limit
+    )
+
+    # Calculate metrics
+    ctx_used = metrics["context_tokens"]
+    ctx_metrics = calculate_context_metrics(ctx_used, context_limit)
+    ratio = ctx_metrics["ratio"]
+
+    bar = build_progress_bar(ratio, compact_ratio=ctx_metrics["compact_ratio"])
+    tokens_str = format_tokens(int(ctx_used))
+    limit_str = format_tokens(context_limit)
+
+    pricing = get_model_pricing(model_id)
+    cost = calculate_session_cost(metrics, pricing)
+    cost_str = format_cost(cost)
+
+    duration_str = format_duration(metrics["session_start"])
+
+    branch = get_git_branch()
+    diff_stat = get_git_diff_stat()
+    branch_part = format_git_branch(branch, diff_stat)
+
+    cache_pct, cache_color = calculate_cache_ratio(metrics)
+    cache_part = format_cache_part(cache_pct, cache_color)
+
+    cost_per_turn = calculate_cost_per_turn(cost, metrics["turn_count"])
+    sparkline_part = build_sparkline(metrics["context_history"])
+
+    compact_prediction = calculate_compaction_prediction(
+        ctx_used, context_limit, metrics["turns_since_compact"], metrics, ratio
+    )
+    efficiency_part = calculate_efficiency(metrics, ctx_used)
+
+    # Initialize API status (may be fetched later)
+    api_status_str = ""
+
+    # Fetch usage data once (used by line2, line3, and compact mode)
+    usage = None
+    if (
+        is_visible("line2", "usage")
+        or is_visible("line3", "usage_weekly")
+        or compact_mode
+    ):
         usage = _fetch_usage()
-        usage_weekly_str = _format_usage_weekly(usage)
-        if usage_weekly_str and is_visible("line3", "usage_weekly"):
-            line3_lines.append(usage_weekly_str)
 
-    recent = metrics["recent_tools"]
-    file_edits = metrics["current_turn_file_edits"]
-    trail_items = []
-    if recent and is_visible("line3", "tool_trace"):
-        for t in recent[-6:]:
-            p = t.split()
-            if len(p) >= 2:
-                trail_items.append(f"{dim}{p[0].lower()}{RESET} {GREEN}{p[-1]}{RESET}")
-            else:
-                trail_items.append(f"{dim}{p[0].lower()}{RESET}")
-    file_edit_parts = []
-    if file_edits and is_visible("line3", "file_edits"):
-        top = sorted(file_edits.items(), key=lambda x: -x[1])[:3]
-        file_edit_parts = [f"{YELLOW}{n}{RESET}{dim}×{c}{RESET}" for n, c in top]
+    # Build line parts using extracted functions
+    line1_parts = build_line1_parts(
+        bar=bar,
+        tokens_str=tokens_str,
+        limit_str=limit_str,
+        compact_prediction=compact_prediction,
+        model=model,
+        sparkline_part=sparkline_part,
+        cost_str=cost_str,
+        duration_str=duration_str,
+        metrics=metrics,
+        efficiency_part=efficiency_part,
+        session_id=session_id,
+    )
 
-    # Wrap trail items across lines based on terminal width
-    term_cols = _get_terminal_cols()
-    buffer = get_setting("custom", "buffer", default=30)
-    term_cols_padded = term_cols - buffer  # buffer to avoid edge clipping
-    widget_offset = 10  # widget (7) + padding (3)
-    max_width = term_cols_padded - widget_offset
-    arrow = f" {dim}\u2192{RESET} "
-    arrow_vis = 3  # " → " visible width
+    line2_parts = build_line2_parts(
+        usage=usage,
+        cwd=cwd,
+        branch_part=branch_part,
+        metrics=metrics,
+        cache_part=cache_part,
+        cost_per_turn=cost_per_turn,
+        api_status_str=api_status_str,
+    )
 
-    if trail_items or file_edit_parts:
-        cur_line_parts = []
-        cur_width = 1  # leading space
-        for i, item in enumerate(trail_items):
-            item_width = _visible_len(item)
-            joiner_width = arrow_vis if cur_line_parts else 0
-            if cur_line_parts and cur_width + joiner_width + item_width > max_width:
-                line3_lines.append(f" {arrow.join(cur_line_parts)}")
-                cur_line_parts = [item]
-                cur_width = 1 + item_width
-            else:
-                cur_line_parts.append(item)
-                cur_width += joiner_width + item_width
-        if cur_line_parts:
-            tail = arrow.join(cur_line_parts)
-            if file_edit_parts:
-                edit_str = " ".join(file_edit_parts)
-                edit_width = _visible_len(edit_str)
-                sep_width = _visible_len(sep)
-                if cur_width + sep_width + edit_width <= max_width:
-                    tail += f"{sep}{edit_str}"
-                else:
-                    line3_lines.append(f" {tail}")
-                    tail = f" {edit_str}"
-            line3_lines.append(f" {tail}")
-        elif file_edit_parts:
-            line3_lines.append(f" {' '.join(file_edit_parts)}")
+    # API status (fetched once, used by both full and compact modes)
+    if not api_status_str and is_visible("line2", "api_status"):
+        api_status = _fetch_api_status()
+        api_status_str = _format_api_status(api_status)
+        if api_status_str and is_visible("line2", "api_status"):
+            line2_parts.append(api_status_str)
+
+    line3_lines = build_line3_parts(usage=usage, metrics=metrics)
 
     # ── Compact mode: single line with essentials ──
     if compact_mode:
-        compact_parts = []
-
-        # Model name first
-        if is_visible("line1", "model"):
-            compact_parts.append(f"{BOLD}{MAGENTA}{model}{RESET}")
-
-        # Context bar (line1)
-        if is_visible("line1", "context_bar"):
-            compact_parts.append(f"{bar}")
-            if is_visible("line1", "token_count"):
-                compact_parts.append(
-                    f"{CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
-                )
-
-        # Usage bars (session + weekly) - fetch once
-        usage = None
-        if is_visible("line2", "usage") or is_visible("line3", "usage_weekly"):
-            usage = _fetch_usage()
-
-        # Session usage (line2)
-        if is_visible("line2", "usage") and usage:
-            usage_session_str = _format_usage_session(usage)
-            if usage_session_str:
-                compact_parts.append(usage_session_str)
-
-        # Weekly usage (line3)
-        if is_visible("line3", "usage_weekly") and usage:
-            usage_weekly_str = _format_usage_weekly(usage)
-            if usage_weekly_str:
-                compact_parts.append(usage_weekly_str)
-
-        if compact_parts:
-            print(f" {sep.join(compact_parts)}")
+        compact_line = build_compact_line(
+            model=model,
+            bar=bar,
+            tokens_str=tokens_str,
+            limit_str=limit_str,
+            usage=usage,
+        )
+        if compact_line:
+            print(f" {compact_line}")
         return
 
     # ── Full mode: 3 lines ──
@@ -1536,6 +1677,12 @@ def main():
         "STATUSLINE_WIDGET", "matrix"
     )
     widget_fn = _load_widget(widget_name)
+
+    # Terminal dimensions for output
+    term_cols = _get_terminal_cols()
+    buffer = get_setting("custom", "buffer", default=30)
+    term_cols_padded = term_cols - buffer
+    sep = f" {GRAY}\u22ee{RESET} "
 
     line1_str = f" {sep.join(line1_parts)}" if line1_parts else ""
     line2_str = f" {sep.join(line2_parts)}" if line2_parts else ""
