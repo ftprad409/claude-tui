@@ -119,7 +119,7 @@ Thresholds can be adjusted by editing the constants at the top of each script:
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.13+
 - No external dependencies
 
 ## License

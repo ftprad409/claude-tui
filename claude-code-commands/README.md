@@ -59,7 +59,7 @@ The status line provides the always-visible glance. These commands provide the d
 ## Requirements
 
 - Claude Code with custom commands support
-- Python 3.8+, stdlib only — no external dependencies
+- Python 3.13+, stdlib only — no external dependencies
 
 ## Conventions
 

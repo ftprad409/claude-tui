@@ -135,5 +135,5 @@ python3 claude-code-monitor/test_monitor.py -v
 
 ## Requirements
 
-- Python 3.8+, stdlib only — no external dependencies
+- Python 3.13+, stdlib only — no external dependencies
 - Optional: sibling tools (`claude-code-session-stats/`, `claude-code-session-manager/`) for hotkey integration

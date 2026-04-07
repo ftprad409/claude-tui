@@ -90,7 +90,7 @@ All commands accept a session ID **prefix** — you only need enough characters 
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.13+
 - No external dependencies
 - `claude` CLI on PATH (for `resume` command)
 

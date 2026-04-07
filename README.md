@@ -6,7 +6,7 @@
 [![Stars](https://img.shields.io/github/stars/slima4/claude-tui)](https://github.com/slima4/claude-tui/stargazers)
 [![Last Commit](https://img.shields.io/github/last-commit/slima4/claude-tui)](https://github.com/slima4/claude-tui/commits/main)
 [![License](https://img.shields.io/github/license/slima4/claude-tui)](https://github.com/slima4/claude-tui/blob/main/LICENSE)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue?logo=python&logoColor=white)]()
+[![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue?logo=python&logoColor=white)]()
 [![Shell](https://img.shields.io/badge/shell-bash%20%7C%20zsh-black?logo=gnubash&logoColor=white)]()
 
 Real-time dashboard, statusline, API interceptor, and analytics for Claude Code sessions. Includes live service health monitoring from status.claude.com.
@@ -144,6 +144,8 @@ Customize behavior via `~/.claude/claudeui.json` (hot-reloads, no restart needed
 ### [claude-code-statusline](./claude-code-statusline/)
 
 Real-time status bar for Claude Code with context sparkline, session cost, cache ratio, thinking count, live tool trace, file edit tracking, and plan usage bars.
+
+For troubleshooting refresh/caching/parsing behavior, you can enable statusline diagnostics with `STATUSLINE_DEBUG=1` (logs to stderr). See the [statusline README](./claude-code-statusline/README.md) for details.
 
 ```
   0110100 Opus 4.6 │ ████████████████████ 42% 112k/1.0M │ ~24 turns left │ ▁▂▃▅▆▇↓▁▃▅ │ $2.34 │ 12m │ 0x compact │ #a1b2c3d4

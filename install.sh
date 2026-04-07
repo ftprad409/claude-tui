@@ -68,16 +68,16 @@ print_header
 
 step "Checking requirements..."
 
-# Python 3.8+
+# Python 3.13+
 if ! command -v python3 &>/dev/null; then
-    fail "python3 not found. Install Python 3.8+ first."
+    fail "python3 not found. Install Python 3.13+ first."
 fi
 
 PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
 PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
 PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
-if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 8 ]; }; then
-    fail "Python 3.8+ required, found $PY_VERSION"
+if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 13 ]; }; then
+    fail "Python 3.13+ required, found $PY_VERSION"
 fi
 ok "Python $PY_VERSION"
 

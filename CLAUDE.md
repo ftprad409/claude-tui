@@ -171,14 +171,14 @@ python3 claudetui.py --help          # test dispatcher
 
 ## Gotchas
 
-- **Duplicated constants**: `MODEL_PRICING` exists in 5 places: `statusline.py`, `monitor/lib.py`, `commands/tui/lib.py`, `session-stats.py`, and `session-manager.py`. The sniffer (`sniffer.py`) has a 6th copy using abbreviated model family keys. `MODEL_CONTEXT_WINDOW`, `COMPACT_BUFFER`, and `get_context_limit()` exist in 3 places: `statusline.py`, `monitor/lib.py`, and `commands/tui/lib.py`. All pricing dicts include `cache_write` (1.25x input). Keep all in sync when updating pricing or adding models.
-- **Duplicated fetcher**: `_fetch_api_status()` and `_format_api_status()` exist in both `statusline.py` and `monitor.py`. Keep in sync when changing status page logic.
+- **Duplicated constants**: `MODEL_PRICING` exists in 5 places: `statusline_core/constants.py`, `monitor/lib.py`, `commands/tui/lib.py`, `session-stats.py`, and `session-manager.py`. The sniffer (`sniffer.py`) has a 6th copy using abbreviated model family keys. `MODEL_CONTEXT_WINDOW`, `COMPACT_BUFFER`, and `get_context_limit()` exist in 3 places: `statusline_core/transcript.py`, `monitor/lib.py`, and `commands/tui/lib.py`. All pricing dicts include `cache_write` (1.25x input). Keep all in sync when updating pricing or adding models.
+- **Duplicated fetcher**: `fetch_api_status()`/`format_api_status()` in `statusline_core/api_clients.py` and `_fetch_api_status()`/`_format_api_status()` in `monitor.py` implement the same status page behavior. Keep them in sync when changing status page logic.
 - **Transcript format**: Compaction entries use `{"type": "system", "subtype": "compact_boundary"}`. Thinking blocks use `{"type": "thinking"}` in assistant message content (token counts redacted by the API).
 - **Widget API**: Widget functions have signature `widget_fn(frame, ratio) -> list[str]` returning exactly 3 rows.
 
 ## Conventions
 
 - Each tool is self-contained in its own directory with a README.md
-- Python 3.8+, stdlib only — no external dependencies
+- Python 3.13+, stdlib only — no external dependencies
 - All tools parse Claude Code's JSONL transcript format from `~/.claude/projects/`
 - MIT licensed

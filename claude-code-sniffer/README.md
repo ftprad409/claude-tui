@@ -147,5 +147,5 @@ Tracking is per session ID, so a new Claude Code session connecting to a running
 
 ## Requirements
 
-- Python 3.8+, stdlib only — no external dependencies
+- Python 3.13+, stdlib only — no external dependencies
 - Claude Code with `ANTHROPIC_BASE_URL` support

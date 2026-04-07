@@ -66,7 +66,7 @@ Claude Code has a 200k token context window but provides no visibility into how 
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.13+
 - Claude Code with `statusLine` support
 
 No external dependencies — stdlib only.
@@ -162,6 +162,18 @@ Shared config file at `~/.claude/claudeui.json` (hot-reloads):
 |---------|--------|-------------|
 | `sparkline.mode` | `"tail"` (default), `"merge"` | `tail` shows last N turns at full resolution; `merge` combines turns into buckets |
 | `sparkline.merge_size` | number (default: `2`) | How many turns to merge per bar in merge mode |
+
+## Debugging
+
+`statusline.py` runs frequently (every Claude Code status refresh), so debug output is disabled by default.
+
+To temporarily enable diagnostics, set:
+
+```bash
+STATUSLINE_DEBUG=1
+```
+
+When enabled, internal warnings are written to **stderr** with a `[statusline]` prefix. This can help diagnose cache/lock, parsing, or API fallback issues without changing normal statusline output.
 
 ## Context bar color thresholds
 

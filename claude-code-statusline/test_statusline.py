@@ -1,4 +1,295 @@
 #!/usr/bin/env python3
+"""Comprehensive tests for statusline SRP modules."""
+
+import io
+import json
+import os
+import sys
+import tempfile
+import unittest
+from contextlib import redirect_stdout
+from unittest import mock
+
+import statusline
+from statusline_core import api_clients, git_info, render, transcript
+from statusline_core.constants import DEFAULT_CONTEXT_LIMIT
+
+
+def _write_jsonl(path, rows):
+    with open(path, "w") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+
+
+class TestTranscriptParsing(unittest.TestCase):
+    def test_parse_input_data(self):
+        data = {
+            "model": {"display_name": "Sonnet", "id": "claude-sonnet-4-6"},
+            "workspace": {"current_dir": "/tmp/project"},
+            "transcript_path": "/tmp/t.jsonl",
+            "session_id": "abcdef123456",
+        }
+        parsed = transcript.parse_input_data(data)
+        self.assertEqual(parsed["model"], "Sonnet")
+        self.assertEqual(parsed["cwd"], "project")
+        self.assertEqual(parsed["session_id"], "abcdef12")
+
+    def test_parse_transcript_metrics_and_tools(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = os.path.join(td, "t.jsonl")
+            rows = [
+                {
+                    "type": "user",
+                    "timestamp": "2026-04-07T00:00:00Z",
+                    "message": {"content": [{"type": "text", "text": "hi"}]},
+                },
+                {
+                    "type": "assistant",
+                    "message": {
+                        "usage": {
+                            "input_tokens": 100,
+                            "cache_creation_input_tokens": 10,
+                            "cache_read_input_tokens": 40,
+                            "output_tokens": 20,
+                        },
+                        "content": [
+                            {"type": "thinking", "text": "..."},
+                            {
+                                "type": "tool_use",
+                                "name": "Edit",
+                                "input": {"path": "/tmp/a.py"},
+                            },
+                            {
+                                "type": "tool_use",
+                                "id": "task_1",
+                                "name": "Task",
+                                "input": {},
+                            },
+                        ],
+                    },
+                },
+                {
+                    "type": "user",
+                    "message": {"content": [{"type": "tool_result", "is_error": True}]},
+                },
+                {"type": "system", "subtype": "compact_boundary"},
+            ]
+            _write_jsonl(p, rows)
+            m = transcript.parse_transcript(p, context_limit=200_000)
+            self.assertEqual(m["turn_count"], 1)
+            self.assertEqual(m["tool_calls"], 2)
+            self.assertEqual(m["tool_errors"], 1)
+            self.assertEqual(m["compact_count"], 1)
+            self.assertEqual(m["thinking_count"], 1)
+            self.assertIn("/tmp/a.py", m["files_touched"])
+            self.assertEqual(m["subagent_count"], 1)
+
+    def test_context_limit_and_pricing_lookup(self):
+        self.assertEqual(transcript.get_context_limit("claude-opus-4-6"), 1_000_000)
+        self.assertEqual(
+            transcript.get_context_limit("unknown-model"), DEFAULT_CONTEXT_LIMIT
+        )
+        p = transcript.get_model_pricing("claude-sonnet-4-6")
+        self.assertIn("input", p)
+
+    def test_compaction_prediction_and_efficiency(self):
+        metrics = {
+            "context_per_turn": [(1, 1000), (2, 1300), (3, 1700)],
+            "context_at_last_compact": 900,
+            "total_context_built": 10000,
+            "tokens_wasted": 1000,
+        }
+        pred = transcript.calculate_compaction_prediction(
+            1700, 200_000, 3, metrics, ratio=0.2
+        )
+        self.assertIn("turns left", pred)
+        with mock.patch("statusline_core.transcript.is_visible", return_value=True):
+            eff = transcript.calculate_efficiency(metrics, 2000)
+        self.assertIn("eff", eff)
+
+
+class TestFormattingAndRender(unittest.TestCase):
+    def test_token_cost_duration_format(self):
+        self.assertEqual(transcript.format_tokens(1200), "1.2k")
+        self.assertEqual(transcript.format_cost(0.001), "<$0.01")
+        self.assertEqual(transcript.format_duration(""), "0m")
+
+    def test_cache_ratio_and_part(self):
+        metrics = {"input_tokens_total": 100, "cache_read_tokens_total": 100}
+        pct, color = transcript.calculate_cache_ratio(metrics)
+        part = transcript.format_cache_part(pct, color)
+        self.assertIn("cache", part)
+
+    def test_progress_bar_and_sparkline(self):
+        bar = render.build_progress_bar(0.5, length=10, compact_ratio=0.8)
+        self.assertIn("%", bar)
+        sp = render.build_sparkline([10, 20, None, 5], width=8)
+        self.assertTrue(len(sp) > 0)
+
+    def test_wrap_and_terminal_width(self):
+        lines = render.wrap_line_parts(
+            ["a", "b", "c"],
+            ["file.py"],
+            max_width=6,
+        )
+        self.assertTrue(len(lines) >= 1)
+        self.assertIsInstance(render.calculate_terminal_width(), int)
+
+    def test_line_builders(self):
+        metrics = {
+            "compact_count": 1,
+            "turn_count": 2,
+            "files_touched": {"a.py"},
+            "tool_errors": 0,
+            "thinking_count": 1,
+            "subagent_count": 1,
+            "recent_tools": ["Edit a.py"],
+            "current_turn_file_edits": {"a.py": 2},
+        }
+        with mock.patch("statusline_core.render.is_visible", return_value=True):
+            l1 = render.build_line1_parts(
+                "bar",
+                "1k",
+                "200k",
+                "~10 turns left",
+                "Sonnet",
+                "spark",
+                "$1.00",
+                "10m",
+                metrics,
+                "90% eff",
+                "abcd1234",
+            )
+            l2 = render.build_line2_parts(
+                {"five_hour": {"utilization": 10, "resets_at": ""}},
+                "proj",
+                "main",
+                metrics,
+                "80% cache",
+                "~$0.50/turn",
+                "status",
+            )
+            l3 = render.build_line3_parts(
+                {"seven_day": {"utilization": 50, "resets_at": ""}},
+                metrics,
+            )
+            compact = render.build_compact_line("Sonnet", "bar", "1k", "200k", {})
+        self.assertTrue(len(l1) > 0)
+        self.assertTrue(len(l2) > 0)
+        self.assertIsInstance(l3, list)
+        self.assertTrue(isinstance(compact, str))
+
+
+class TestApiClientFormatting(unittest.TestCase):
+    def test_api_status_formatting(self):
+        data = {
+            "status": "none",
+            "components": {"Claude Code API": "major_outage"},
+            "incidents": [],
+        }
+        with mock.patch("statusline_core.api_clients.get_setting", return_value=False):
+            out = api_clients.format_api_status(data)
+        self.assertIn("outage", out)
+
+    def test_usage_bar_formatters(self):
+        usage = {
+            "five_hour": {"utilization": 25, "resets_at": "2099-01-01T00:00:00Z"},
+            "seven_day": {"utilization": 75, "resets_at": "2099-01-02T00:00:00Z"},
+        }
+        s = api_clients.format_usage_session(usage)
+        w = api_clients.format_usage_weekly(usage)
+        self.assertIn("%", s)
+        self.assertIn("w", w)
+
+    def test_fetch_short_circuit_when_disabled(self):
+        with mock.patch("statusline_core.api_clients.get_setting", return_value=False):
+            self.assertIsNone(api_clients.fetch_usage())
+            self.assertIsNone(api_clients.fetch_api_status())
+
+
+class TestGitInfo(unittest.TestCase):
+    def test_git_helpers_fail_closed(self):
+        with mock.patch("subprocess.run", side_effect=RuntimeError("boom")):
+            self.assertEqual(git_info.get_git_branch(), "")
+            self.assertEqual(git_info.get_git_diff_stat(), "")
+
+
+class TestEntrypointIntegration(unittest.TestCase):
+    def _minimal_payload(self, transcript_path):
+        return {
+            "model": {"display_name": "Sonnet", "id": "claude-sonnet-4-6"},
+            "workspace": {"current_dir": "/tmp/proj"},
+            "transcript_path": transcript_path,
+            "session_id": "abcdef123456",
+        }
+
+    def _write_min_transcript(self):
+        td = tempfile.TemporaryDirectory()
+        p = os.path.join(td.name, "session.jsonl")
+        _write_jsonl(
+            p,
+            [
+                {
+                    "type": "user",
+                    "timestamp": "2026-04-07T00:00:00Z",
+                    "message": {"content": [{"type": "text", "text": "hi"}]},
+                },
+                {
+                    "type": "assistant",
+                    "message": {
+                        "usage": {
+                            "input_tokens": 100,
+                            "cache_creation_input_tokens": 10,
+                            "cache_read_input_tokens": 40,
+                            "output_tokens": 20,
+                        },
+                        "content": [],
+                    },
+                },
+            ],
+        )
+        return td, p
+
+    def test_main_compact_mode_outputs_line(self):
+        td, p = self._write_min_transcript()
+        self.addCleanup(td.cleanup)
+        payload = self._minimal_payload(p)
+        out = io.StringIO()
+        with mock.patch.object(sys, "argv", ["statusline.py", "--compact"]), mock.patch(
+            "sys.stdin", io.StringIO(json.dumps(payload))
+        ), mock.patch("statusline.fetch_usage", return_value=None), mock.patch(
+            "statusline.fetch_api_status", return_value=None
+        ), mock.patch(
+            "statusline.format_api_status", return_value=""
+        ), redirect_stdout(
+            out
+        ):
+            statusline.main()
+        self.assertTrue(out.getvalue().strip())
+
+    def test_main_full_mode_outputs_lines(self):
+        td, p = self._write_min_transcript()
+        self.addCleanup(td.cleanup)
+        payload = self._minimal_payload(p)
+        out = io.StringIO()
+        with mock.patch.object(sys, "argv", ["statusline.py"]), mock.patch(
+            "sys.stdin", io.StringIO(json.dumps(payload))
+        ), mock.patch("statusline.fetch_usage", return_value=None), mock.patch(
+            "statusline.fetch_api_status", return_value=None
+        ), mock.patch(
+            "statusline.format_api_status", return_value=""
+        ), mock.patch.dict(
+            os.environ, {"STATUSLINE_WIDGET": "none"}, clear=False
+        ), redirect_stdout(
+            out
+        ):
+            statusline.main()
+        self.assertTrue(len(out.getvalue().splitlines()) >= 2)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
+#!/usr/bin/env python3
 """Tests for statusline.py helper functions."""
 
 import sys

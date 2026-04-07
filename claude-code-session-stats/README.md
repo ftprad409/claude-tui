@@ -56,7 +56,7 @@ python3 session-stats.py --days 7 --summary
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.13+
 - No external dependencies
 
 ## Supported models

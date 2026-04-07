@@ -24,10 +24,10 @@ Only two tools have tests: monitor and sniffer. Run both before/after refactorin
   - Force refresh when five_hour.resets_at time has passed
   - Preserve cache on 429 only if cache has real usage data (five_hour exists)
 
-- **`MODEL_PRICING`** duplicated in 6 files: statusline.py, monitor/lib.py, commands/tui/lib.py, session-stats.py, session-manager.py, sniffer.py (abbreviated keys). Keep in sync when updating pricing.
+- **`MODEL_PRICING`** duplicated in 6 files: `statusline_core/constants.py`, `monitor/lib.py`, `commands/tui/lib.py`, `session-stats.py`, `session-manager.py`, `sniffer.py` (abbreviated keys). Keep in sync when updating pricing.
 - **`MODEL_CONTEXT_WINDOW`/`COMPACT_BUFFER`/`get_context_limit()`** duplicated in 3 files. Sync together.
-- **`_fetch_api_status()` and `_format_api_status()`** duplicated in statusline.py and monitor.py. Sync when changing status page logic.
-- **`_fetch_usage()`, `_format_usage_session()`, `_format_usage_weekly()`** in statusline.py only. OAuth token from `~/.claude/.credentials.json` (`claudeAiOauth.accessToken`) or `CLAUDE_CODE_OAUTH_TOKEN` env.
+- **Status page fetcher parity**: `statusline_core/api_clients.py` (`fetch_api_status()`/`format_api_status()`) and `monitor.py` (`_fetch_api_status()`/`_format_api_status()`) should stay behaviorally aligned.
+- **Usage fetch + formatting** now live in `statusline_core/api_clients.py`: `fetch_usage()`, `format_usage_session()`, `format_usage_weekly()`. OAuth token from `~/.claude/.credentials.json` (`claudeAiOauth.accessToken`) or `CLAUDE_CODE_OAUTH_TOKEN` env.
 - **`usage`** (line2) and **`usage_weekly`** (line3) are separate configurable components in custom mode.
 - **Widget API**: `widget_fn(frame, ratio) -> list[str]` must return exactly 3 rows.
 
