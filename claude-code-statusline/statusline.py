@@ -464,7 +464,33 @@ def _fetch_usage():
     try:
         with open(_USAGE_CACHE_PATH, "r") as f:
             cache = json.load(f)
-        if time.time() - cache.get("fetched_at", 0) < rate_limit:
+
+        # Check retry backoff - don't retry too frequently
+        retry_after = cache.get("retry_after", 0)
+        now = time.time()
+        if now < retry_after:
+            return cache  # still in backoff period
+
+        cached_time = cache.get("fetched_at", 0)
+
+        # Check if any usage has reset since cache was fetched
+        five_hour_reset = cache.get("five_hour", {}).get("resets_at", "")
+
+        should_refresh = False
+        if five_hour_reset:
+            try:
+                from datetime import datetime, timezone
+
+                reset_dt = datetime.fromisoformat(
+                    five_hour_reset.replace("Z", "+00:00")
+                )
+                if reset_dt.timestamp() < now:
+                    should_refresh = True  # Reset time passed, refresh immediately
+            except Exception:
+                pass
+
+        # Use cache if within rate limit AND no reset has occurred
+        if not should_refresh and now - cached_time < rate_limit:
             return cache
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         pass
@@ -508,8 +534,26 @@ def _fetch_usage():
                 os.replace(tmp, _USAGE_CACHE_PATH)
                 return cache
             elif resp.status == 429:
-                # Rate limited - return stale cache
-                pass
+                # Rate limited - implement exponential backoff
+                # Only save backoff if we had real usage data to preserve
+                has_usage_data = bool(cache and cache.get("five_hour"))
+
+                if has_usage_data:
+                    current_retry = cache.get("retry_count", 0)
+                    retry_count = current_retry + 1
+                    backoff_seconds = min(120 * (2**current_retry), 600)
+
+                    cache["retry_count"] = retry_count
+                    cache["retry_after"] = time.time() + backoff_seconds
+
+                    os.makedirs(os.path.dirname(_USAGE_CACHE_PATH), exist_ok=True)
+                    tmp = _USAGE_CACHE_PATH + ".tmp"
+                    with open(tmp, "w") as f:
+                        json.dump(cache, f)
+                    os.replace(tmp, _USAGE_CACHE_PATH)
+
+                # Return cache if it has usage data, otherwise None
+                return cache if has_usage_data else None
         finally:
             conn.close()
     except Exception:
