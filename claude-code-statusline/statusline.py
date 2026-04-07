@@ -27,6 +27,10 @@ import sys
 import time
 from datetime import datetime, timezone
 
+# Constants
+_CLAUDE_DIR = ".claude"
+APPLICATION_JSON = "application/json"
+
 # Context window sizes by model family
 MODEL_CONTEXT_WINDOW = {
     "claude-opus-4": 1_000_000,  # 1M context via anthropic-beta flag
@@ -170,7 +174,7 @@ def load_settings():
     Re-reads the file if it has been modified since last load.
     """
     global _SETTINGS_CACHE, _SETTINGS_MTIME
-    path = os.path.join(os.path.expanduser("~"), ".claude", "claudeui.json")
+    path = os.path.join(os.path.expanduser("~"), _CLAUDE_DIR, "claudeui.json")
     try:
         mtime = os.path.getmtime(path)
         if _SETTINGS_CACHE is not None and mtime == _SETTINGS_MTIME:
@@ -178,7 +182,7 @@ def load_settings():
         with open(path, "r") as f:
             _SETTINGS_CACHE = json.load(f)
         _SETTINGS_MTIME = mtime
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except (FileNotFoundError, OSError):
         _SETTINGS_CACHE = {}
     return _SETTINGS_CACHE
 
@@ -269,7 +273,7 @@ def get_model_pricing(model_id):
 
 # Claude status page (Atlassian Statuspage v2 API)
 _STATUS_CACHE_PATH = os.path.join(
-    os.path.expanduser("~"), ".claude", "api-status-cache.json"
+    os.path.expanduser("~"), _CLAUDE_DIR, "api-status-cache.json"
 )
 
 
@@ -291,7 +295,7 @@ def _fetch_api_status():
             cache = json.load(f)
         if time.time() - cache.get("fetched_at", 0) < ttl:
             return cache
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except (FileNotFoundError, OSError):
         pass
 
     # Fetch fresh
@@ -303,7 +307,7 @@ def _fetch_api_status():
         conn = http.client.HTTPSConnection("status.claude.com", timeout=2, context=ctx)
         try:
             conn.request(
-                "GET", "/api/v2/summary.json", headers={"Accept": "application/json"}
+                "GET", "/api/v2/summary.json", headers={"Accept": APPLICATION_JSON}
             )
             resp = conn.getresponse()
             if resp.status == 200:
@@ -390,7 +394,9 @@ def _format_api_status(status_data):
 
 
 # OAuth usage API cache
-_USAGE_CACHE_PATH = os.path.join(os.path.expanduser("~"), ".claude", "usage-cache.json")
+_USAGE_CACHE_PATH = os.path.join(
+    os.path.expanduser("~"), _CLAUDE_DIR, "usage-cache.json"
+)
 _USAGE_MIN_INTERVAL = 60  # rate limit: minimum 60 seconds between requests
 
 
@@ -402,7 +408,7 @@ def _load_oauth_token():
         return token
 
     # Try credentials file
-    creds_path = os.path.join(os.path.expanduser("~"), ".claude", ".credentials.json")
+    creds_path = os.path.join(os.path.expanduser("~"), _CLAUDE_DIR, ".credentials.json")
     try:
         with open(creds_path, "r") as f:
             creds = json.load(f)
@@ -412,7 +418,7 @@ def _load_oauth_token():
         )
         if token:
             return token
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except (FileNotFoundError, OSError):
         pass
 
     # Try Keychain (macOS)
@@ -459,8 +465,30 @@ def _fetch_usage():
     # Rate limiting: minimum interval between API calls
     rate_limit = max(60, get_setting("usage", "rate_limit", default=60))
     cache = None
+    lock_file = _USAGE_CACHE_PATH + ".lock"
 
-    # Read cache
+    # Clean up stale lock file if older than 5 minutes (crashed process)
+    try:
+        if os.path.exists(lock_file):
+            if os.path.getmtime(lock_file) < time.time() - 300:
+                os.remove(lock_file)
+    except OSError:
+        pass
+
+    # Try to acquire lock for fetching
+    def try_acquire_lock():
+        try:
+            import fcntl
+
+            lock_fd = open(lock_file, "w")
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return lock_fd
+        except (IOError, OSError):
+            return None
+
+    lock_fd = try_acquire_lock()
+
+    # Read cache (always, even if we don't have lock)
     try:
         with open(_USAGE_CACHE_PATH, "r") as f:
             cache = json.load(f)
@@ -469,6 +497,11 @@ def _fetch_usage():
         retry_after = cache.get("retry_after", 0)
         now = time.time()
         if now < retry_after:
+            if lock_fd:
+                import fcntl
+
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
             return cache  # still in backoff period
 
         cached_time = cache.get("fetched_at", 0)
@@ -489,10 +522,22 @@ def _fetch_usage():
             except Exception:
                 pass
 
-        # Use cache if within rate limit AND no reset has occurred
-        if not should_refresh and now - cached_time < rate_limit:
+        # Use cache if within rate limit AND no reset has occurred AND we don't have lock
+        if not should_refresh and now - cached_time < rate_limit and lock_fd is None:
             return cache
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except (FileNotFoundError, OSError):
+        pass
+
+    # If we don't have lock, another process is fetching - return cache or None
+    if lock_fd is None:
+        return cache
+
+    # We have lock - do the fetch
+    # Re-read cache after acquiring lock (another process may have updated)
+    try:
+        with open(_USAGE_CACHE_PATH, "r") as f:
+            cache = json.load(f)
+    except:
         pass
 
     # Fetch fresh
@@ -511,8 +556,8 @@ def _fetch_usage():
                 "GET",
                 "/api/oauth/usage",
                 headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
+                    "Accept": APPLICATION_JSON,
+                    "Content-Type": APPLICATION_JSON,
                     "Authorization": f"Bearer {token}",
                     "anthropic-beta": "oauth-2025-04-20",
                 },
@@ -558,6 +603,13 @@ def _fetch_usage():
             conn.close()
     except Exception:
         pass
+
+    # Release lock on exit
+    if lock_fd:
+        import fcntl
+
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
 
     return cache  # stale cache better than nothing
 

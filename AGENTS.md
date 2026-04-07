@@ -17,6 +17,13 @@ Only two tools have tests: monitor and sniffer. Run both before/after refactorin
 
 ## Gotchas (hard-won knowledge)
 
+- **`python3 claudetui.py uninstall`** removes the repo directory! Use with caution - it deletes the git repo folder
+
+- **Usage API rate limiting**: The OAuth usage API frequently returns 429 errors. Solutions:
+  - Exponential backoff: 2min → 4min → 8min (max 10min)
+  - Force refresh when five_hour.resets_at time has passed
+  - Preserve cache on 429 only if cache has real usage data (five_hour exists)
+
 - **`MODEL_PRICING`** duplicated in 6 files: statusline.py, monitor/lib.py, commands/tui/lib.py, session-stats.py, session-manager.py, sniffer.py (abbreviated keys). Keep in sync when updating pricing.
 - **`MODEL_CONTEXT_WINDOW`/`COMPACT_BUFFER`/`get_context_limit()`** duplicated in 3 files. Sync together.
 - **`_fetch_api_status()` and `_format_api_status()`** duplicated in statusline.py and monitor.py. Sync when changing status page logic.
