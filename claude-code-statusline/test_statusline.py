@@ -102,7 +102,7 @@ class TestTranscriptParsing(unittest.TestCase):
         pred = transcript.calculate_compaction_prediction(
             1700, 200_000, 3, metrics, ratio=0.2
         )
-        self.assertIn("turns left", pred)
+        self.assertIn("ETA", pred)
         with mock.patch("statusline_core.transcript.is_visible", return_value=True):
             eff = transcript.calculate_efficiency(metrics, 2000)
         self.assertIn("eff", eff)
@@ -151,7 +151,7 @@ class TestFormattingAndRender(unittest.TestCase):
                 "bar",
                 "1k",
                 "200k",
-                "~10 turns left",
+                "ETA 10 turns",
                 "Sonnet",
                 "spark",
                 "$1.00",
@@ -166,6 +166,7 @@ class TestFormattingAndRender(unittest.TestCase):
                 "main",
                 metrics,
                 "80% cache",
+                80,
                 "~$0.50/turn",
                 "status",
             )
@@ -199,7 +200,7 @@ class TestApiClientFormatting(unittest.TestCase):
         s = api_clients.format_usage_session(usage)
         w = api_clients.format_usage_weekly(usage)
         self.assertIn("%", s)
-        self.assertIn("w", w)
+        self.assertIn("W ", w)
 
     def test_fetch_short_circuit_when_disabled(self):
         with mock.patch("statusline_core.api_clients.get_setting", return_value=False):
@@ -501,7 +502,7 @@ class TestCalculateCompactionPrediction:
             "context_at_last_compact": 10000,
         }
         result = calculate_compaction_prediction(40000, 200000, 3, metrics, 0.2)
-        assert "turns left" in result
+        assert "ETA" in result
 
 
 class TestCalculateEfficiency:

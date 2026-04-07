@@ -322,6 +322,25 @@ def calculate_cost_per_turn(cost: float, turn_count: int) -> str:
     return ""
 
 
+def format_context_trend(metrics: dict) -> str:
+    """Readable context growth trend (tokens per turn)."""
+    points = [ctx for _, ctx in metrics.get("context_per_turn", [])]
+    if len(points) < 2:
+        return ""
+    deltas = [points[i] - points[i - 1] for i in range(1, len(points))]
+    recent = deltas[-4:]
+    if not recent:
+        return ""
+    avg_delta = sum(recent) / len(recent)
+    magnitude = format_tokens(abs(int(avg_delta)))
+    if avg_delta > 1200:
+        color = ORANGE if avg_delta > 5000 else YELLOW
+        return f"{color}CTX ↑{magnitude}{RESET}{GRAY}/t{RESET}"
+    if avg_delta < -1200:
+        return f"{GREEN}CTX ↓{magnitude}{RESET}{GRAY}/t{RESET}"
+    return f"{GRAY}CTX →{magnitude}{RESET}{GRAY}/t{RESET}"
+
+
 def _get_compact_ceiling(context_limit: int) -> float:
     compact_ceiling = context_limit - COMPACT_BUFFER
     env_pct = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
@@ -358,7 +377,23 @@ def _prediction_color(turns_left: int) -> str:
     return GREEN
 
 
-def calculate_compaction_prediction(ctx_used: int, context_limit: int, turns_since: int, metrics: dict, ratio: float) -> str:
+def _format_turns_left(turns_left: int) -> str:
+    """Compact turns-left formatter for cleaner statusline output."""
+    if turns_left >= 1_000_000:
+        return f"{turns_left / 1_000_000:.1f}M"
+    if turns_left >= 1_000:
+        return f"{turns_left / 1_000:.1f}k"
+    return str(turns_left)
+
+
+def calculate_compaction_prediction(
+    ctx_used: int,
+    context_limit: int,
+    turns_since: int,
+    metrics: dict,
+    ratio: float,
+    detailed: bool = True,
+) -> str:
     if turns_since < 2 or ratio <= 0 or ratio >= 1.0:
         return ""
     remaining_tokens = _get_compact_ceiling(context_limit) - ctx_used
@@ -371,7 +406,10 @@ def calculate_compaction_prediction(ctx_used: int, context_limit: int, turns_sin
     if growth_per_turn <= 0 or remaining_tokens <= 0:
         return ""
     turns_left = int(remaining_tokens / growth_per_turn)
-    return f"{_prediction_color(turns_left)}~{turns_left}{RESET} {GRAY}turns left{RESET}"
+    turns_str = _format_turns_left(turns_left)
+    if detailed:
+        return f"{_prediction_color(turns_left)}ETA {turns_str}{RESET} {GRAY}turns{RESET}"
+    return f"{_prediction_color(turns_left)}ETA {turns_str}{RESET}"
 
 
 def calculate_efficiency(metrics: dict, ctx_used: int) -> str:

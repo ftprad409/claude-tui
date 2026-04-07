@@ -21,6 +21,7 @@ from statusline_core.render import (
     build_sparkline,
     get_terminal_cols,
     truncate,
+    visible_len,
 )
 from statusline_core.settings import get_setting, is_visible, load_widget
 from statusline_core.transcript import (
@@ -60,7 +61,26 @@ def main():
     ctx_metrics = calculate_context_metrics(ctx_used, context_limit)
     ratio = ctx_metrics["ratio"]
 
-    bar = build_progress_bar(ratio, compact_ratio=ctx_metrics["compact_ratio"])
+    term_cols = get_terminal_cols()
+    buffer = get_setting("custom", "buffer", default=30)
+    term_cols_padded = term_cols - buffer
+
+    if term_cols_padded <= 90:
+        bar_length = 12
+        spark_width = 8
+    elif term_cols_padded <= 120:
+        bar_length = 16
+        spark_width = 12
+    elif term_cols_padded <= 150:
+        bar_length = 20
+        spark_width = 16
+    else:
+        bar_length = 24
+        spark_width = 20
+
+    bar = build_progress_bar(
+        ratio, length=bar_length, compact_ratio=ctx_metrics["compact_ratio"], pct_label="C"
+    )
     tokens_str = format_tokens(int(ctx_used))
     limit_str = format_tokens(context_limit)
     cost = calculate_session_cost(metrics, get_model_pricing(model_id))
@@ -77,9 +97,15 @@ def main():
     cache_pct, cache_color = calculate_cache_ratio(metrics)
     cache_part = format_cache_part(cache_pct, cache_color)
     cost_per_turn = calculate_cost_per_turn(cost, metrics["turn_count"])
-    sparkline_part = build_sparkline(metrics["context_history"])
+    sparkline_part = build_sparkline(metrics["context_history"], width=spark_width)
+    detailed_eta = term_cols_padded >= 140
     compact_prediction = calculate_compaction_prediction(
-        ctx_used, context_limit, metrics["turns_since_compact"], metrics, ratio
+        ctx_used,
+        context_limit,
+        metrics["turns_since_compact"],
+        metrics,
+        ratio,
+        detailed=detailed_eta,
     )
     efficiency_part = calculate_efficiency(metrics, ctx_used)
 
@@ -101,16 +127,26 @@ def main():
         session_id,
     )
     line2_parts = build_line2_parts(
-        usage, cwd, branch_part, metrics, cache_part, cost_per_turn, ""
+        usage,
+        cwd,
+        branch_part,
+        metrics,
+        cache_part,
+        cache_pct,
+        cost_per_turn,
+        "",
+        usage_bar_length=bar_length,
     )
     if is_visible("line2", "api_status"):
         api_status_str = format_api_status(fetch_api_status())
         if api_status_str:
             line2_parts.append(api_status_str)
-    line3_lines = build_line3_parts(usage, metrics)
+    line3_lines = build_line3_parts(usage, metrics, usage_bar_length=bar_length)
 
     if compact_mode:
-        compact_line = build_compact_line(model, bar, tokens_str, limit_str, usage)
+        compact_line = build_compact_line(
+            model, bar, tokens_str, limit_str, usage, usage_bar_length=bar_length
+        )
         if compact_line:
             print(f" {compact_line}")
         return
@@ -119,12 +155,28 @@ def main():
         "STATUSLINE_WIDGET", "matrix"
     )
     widget_fn = load_widget(os.path.dirname(os.path.abspath(__file__)), widget_name)
-    term_cols = get_terminal_cols()
-    buffer = get_setting("custom", "buffer", default=30)
-    term_cols_padded = term_cols - buffer
     sep = f" {GRAY}⋮{RESET} "
-    line1_str = f" {sep.join(line1_parts)}" if line1_parts else ""
-    line2_str = f" {sep.join(line2_parts)}" if line2_parts else ""
+    sep_vis = 3
+
+    def fit_parts(parts, max_width):
+        fitted = []
+        used = 1  # leading space in output
+        for part in parts:
+            part_width = visible_len(part)
+            extra = part_width if not fitted else sep_vis + part_width
+            if used + extra > max_width:
+                if not fitted:
+                    fitted.append(part)
+                break
+            fitted.append(part)
+            used += extra
+        return fitted
+
+    line1_fitted = fit_parts(line1_parts, term_cols_padded)
+    line2_fitted = fit_parts(line2_parts, term_cols_padded)
+
+    line1_str = f" {sep.join(line1_fitted)}" if line1_fitted else ""
+    line2_str = f" {sep.join(line2_fitted)}" if line2_fitted else ""
 
     if widget_fn:
         wdg = widget_fn(frame=metrics["tool_calls"], ratio=ratio)

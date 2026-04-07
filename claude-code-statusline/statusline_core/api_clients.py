@@ -349,9 +349,10 @@ def format_usage_session(usage_data, length=20):
     ratio = min(pct / 100.0, 1.0)
     color = _color_for_ratio(ratio)
     bar = _build_modern_usage_bar(ratio, length)
-    pct_str = f"{color}{int(pct):>3}%{RESET}"
-    reset_str = (f" ↻ {_format_reset_time(five_hour.get('resets_at', ''))}").ljust(7)
-    return f"{bar} {pct_str} {reset_str}"
+    pct_str = f"{color}S {int(pct):>2}%{RESET}"
+    reset = _format_reset_time(five_hour.get("resets_at", ""))
+    reset_str = (f" ⏱ {reset}" if reset else "").ljust(8)
+    return f"{bar} {pct_str}{reset_str}"
 
 
 def format_usage_weekly(usage_data, length=20):
@@ -366,7 +367,7 @@ def format_usage_weekly(usage_data, length=20):
     ratio = min(pct / 100.0, 1.0)
     color = _color_for_ratio(ratio)
     bar = _build_modern_usage_bar(ratio, length)
-    pct_str = f"{color}{int(pct):>3}%{RESET}{GRAY}w{RESET}"
+    pct_str = f"{color}W {int(pct):>2}%{RESET}"
     reset = _format_reset_time(seven_day.get("resets_at", ""))
-    reset_str = (f" ↻ {reset}" if reset else "").ljust(7)
-    return f"{bar} {pct_str} {reset_str}"
+    reset_str = (f" ⏱ {reset}" if reset else "").ljust(8)
+    return f"{bar} {pct_str}{reset_str}"

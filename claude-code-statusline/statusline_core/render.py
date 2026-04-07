@@ -80,20 +80,34 @@ def build_sparkline(values, width=20):
     blocks = "▁▂▃▄▅▆▇█"
     peak = max((v for v in values if v is not None), default=1) or 1
     chars = []
-    for v in values:
+    total = max(len(values), 1)
+    for idx_pos, v in enumerate(values):
+        recency = idx_pos / max(total - 1, 1)
         if v is None:
-            chars.append(f"\033[38;2;243;139;168m↓{RESET}")
+            # Compaction boundary marker: distinct but less loud than full red.
+            # Fade older markers to reduce noise.
+            marker_color = "\033[38;2;185;155;198m" if recency < 0.5 else "\033[38;2;205;170;210m"
+            chars.append(f"{marker_color}↓{RESET}")
             continue
         r = v / peak
         idx = max(0, min(int(r * (len(blocks) - 1)), len(blocks) - 1))
-        if r < 0.25:
-            color = "\033[38;2;166;227;161m"
-        elif r < 0.50:
-            color = "\033[38;2;148;226;213m"
-        elif r < 0.75:
-            color = "\033[38;2;249;226;175m"
+        # Smoother, modern palette tuned for legibility in dark terminals.
+        if r < 0.20:
+            base = (145, 215, 165)
+        elif r < 0.40:
+            base = (130, 210, 205)
+        elif r < 0.60:
+            base = (190, 214, 155)
+        elif r < 0.80:
+            base = (232, 196, 140)
         else:
-            color = "\033[38;2;250;179;135m"
+            base = (240, 160, 150)
+        # Recency fade: older points are dimmer, latest points are brighter.
+        fade = 0.65 + (0.35 * recency)
+        r_ch = min(255, int(base[0] * fade))
+        g_ch = min(255, int(base[1] * fade))
+        b_ch = min(255, int(base[2] * fade))
+        color = f"\033[38;2;{r_ch};{g_ch};{b_ch}m"
         chars.append(f"{color}{blocks[idx]}{RESET}")
     return "".join(chars)
 
@@ -114,7 +128,7 @@ def _lerp_rgb(stops, t):
     return _rgb(stops[-1][1], stops[-1][2], stops[-1][3])
 
 
-def build_progress_bar(ratio, length=20, compact_ratio=None):
+def build_progress_bar(ratio, length=20, compact_ratio=None, pct_label=""):
     ratio = max(0.0, min(ratio, 1.0))
     precise_fill = ratio * length
     full_cells = int(precise_fill)
@@ -166,7 +180,12 @@ def build_progress_bar(ratio, length=20, compact_ratio=None):
         pct_color = ORANGE
     else:
         pct_color = RED
-    return f"{bar} {pct_color}{ratio * 100:>3.0f}%{RESET}"
+    pct_value = int(ratio * 100)
+    if pct_label:
+        pct_text = f"{pct_label} {pct_value:>2}%"
+    else:
+        pct_text = f"{pct_value:>3}%"
+    return f"{bar} {pct_color}{pct_text}{RESET}"
 
 
 def format_git_branch(branch, diff_stat):
@@ -193,6 +212,24 @@ def format_file_edits(file_edits):
         return []
     top = sorted(file_edits.items(), key=lambda x: -x[1])[:3]
     return [f"{YELLOW}{n}{RESET}{GRAY}×{c}{RESET}" for n, c in top]
+
+
+def _chip(label, value, color=GRAY):
+    """Compact badge-like token for dense telemetry."""
+    return f"{color}{label}{RESET} {value}"
+
+
+def _turns_left_from_prediction(compact_prediction):
+    m = re.search(r"ETA\s+(\d+(?:\.\d+)?)([kM]?)", compact_prediction or "")
+    if not m:
+        return None
+    value = float(m.group(1))
+    suffix = m.group(2)
+    if suffix == "k":
+        value *= 1_000
+    elif suffix == "M":
+        value *= 1_000_000
+    return int(value)
 
 
 def wrap_line_parts(items, file_edit_parts, max_width):
@@ -254,21 +291,37 @@ def build_line1_parts(bar, tokens_str, limit_str, compact_prediction, model, spa
     if is_visible("line1", "cost"):
         parts.append(f"{YELLOW}{cost_str}{RESET}")
     if is_visible("line1", "duration"):
-        parts.append(f"{WHITE}{duration_str}{RESET}")
+        parts.append(f"{WHITE}⏱ {duration_str}{RESET}")
     if is_visible("line1", "compact_count"):
-        parts.append(f"{CYAN}{metrics['compact_count']}{RESET}{dim}x{RESET} compact")
+        parts.append(_chip("CMP", f"{CYAN}{metrics['compact_count']}{RESET}{dim}x{RESET}"))
     if efficiency_part:
         parts.append(efficiency_part)
     if is_visible("line1", "session_id"):
         parts.append(f"{dim}#{RESET}{GRAY}{session_id}{RESET}")
+    turns_left = _turns_left_from_prediction(compact_prediction)
+    if turns_left is not None and turns_left <= 12:
+        if turns_left <= 5:
+            parts.append(f"{RED}⚠ COMPACT SOON{RESET}")
+        else:
+            parts.append(f"{ORANGE}△ compact soon{RESET}")
     return parts
 
 
-def build_line2_parts(usage, cwd, branch_part, metrics, cache_part, cost_per_turn, api_status_str):
+def build_line2_parts(
+    usage,
+    cwd,
+    branch_part,
+    metrics,
+    cache_part,
+    cache_pct,
+    cost_per_turn,
+    api_status_str,
+    usage_bar_length=20,
+):
     parts = []
     dim = GRAY
     if is_visible("line2", "usage"):
-        usage_str = format_usage_session(usage)
+        usage_str = format_usage_session(usage, length=usage_bar_length)
         if usage_str:
             parts.append(usage_str)
     if is_visible("line2", "cwd"):
@@ -276,32 +329,39 @@ def build_line2_parts(usage, cwd, branch_part, metrics, cache_part, cost_per_tur
     if branch_part and is_visible("line2", "git_branch"):
         parts.append(branch_part)
     if is_visible("line2", "turns"):
-        parts.append(f"{CYAN}{metrics['turn_count']}{RESET} {dim}turns{RESET}")
+        turns = metrics["turn_count"]
+        turns_color = GREEN if turns <= 20 else (YELLOW if turns <= 60 else ORANGE)
+        parts.append(_chip("TRN", f"{turns_color}{turns}{RESET}", turns_color))
     if is_visible("line2", "files"):
-        parts.append(f"{CYAN}{len(metrics['files_touched'])}{RESET} {dim}files{RESET}")
+        parts.append(_chip("FIL", f"{CYAN}{len(metrics['files_touched'])}{RESET}"))
     if is_visible("line2", "errors"):
         if metrics["tool_errors"] > 0:
             err_color = RED if metrics["tool_errors"] > 5 else ORANGE
-            parts.append(f"{err_color}{metrics['tool_errors']}{RESET} {dim}err{RESET}")
+            parts.append(_chip("ERR", f"{err_color}{metrics['tool_errors']}{RESET}", err_color))
         else:
-            parts.append(f"{GREEN}0{RESET} {dim}err{RESET}")
+            parts.append(_chip("ERR", f"{GREEN}0{RESET}", GREEN))
     if is_visible("line2", "cache"):
-        parts.append(f"{cache_part.split(' ')[0]} {dim}cache{RESET}")
+        cache_token = cache_part.split(" ")[0]
+        # Lower cache hit rate implies more paid input usage.
+        cache_color = GREEN if cache_pct >= 85 else (YELLOW if cache_pct >= 60 else ORANGE)
+        parts.append(_chip("CAC", f"{cache_color}{cache_token}{RESET}", cache_color))
     if metrics["thinking_count"] > 0 and is_visible("line2", "thinking"):
-        parts.append(f"{MAGENTA}{metrics['thinking_count']}{RESET}{dim}x{RESET} {dim}think{RESET}")
+        thk = metrics["thinking_count"]
+        thk_color = GREEN if thk <= 2 else (YELLOW if thk <= 6 else ORANGE)
+        parts.append(_chip("THK", f"{thk_color}{thk}{RESET}", thk_color))
     if cost_per_turn and is_visible("line2", "cost_per_turn"):
         parts.append(cost_per_turn)
     if metrics["subagent_count"] > 0 and is_visible("line2", "agents"):
-        parts.append(f"{CYAN}{metrics['subagent_count']}{RESET} {dim}agents{RESET}")
+        parts.append(_chip("AGT", f"{CYAN}{metrics['subagent_count']}{RESET}"))
     if api_status_str and is_visible("line2", "api_status"):
         parts.append(api_status_str)
     return parts
 
 
-def build_line3_parts(usage, metrics):
+def build_line3_parts(usage, metrics, usage_bar_length=20):
     lines = []
     if is_visible("line3", "usage_weekly"):
-        weekly_str = format_usage_weekly(usage)
+        weekly_str = format_usage_weekly(usage, length=usage_bar_length)
         if weekly_str:
             lines.append(weekly_str)
     wrapped = wrap_line_parts(
@@ -313,7 +373,7 @@ def build_line3_parts(usage, metrics):
     return lines
 
 
-def build_compact_line(model, bar, tokens_str, limit_str, usage):
+def build_compact_line(model, bar, tokens_str, limit_str, usage, usage_bar_length=20):
     parts = []
     if is_visible("line1", "model"):
         parts.append(f"{BOLD}{MAGENTA}{model}{RESET}")
@@ -322,8 +382,8 @@ def build_compact_line(model, bar, tokens_str, limit_str, usage):
         if is_visible("line1", "token_count"):
             parts.append(f"{CYAN}{tokens_str}{RESET}{GRAY}/{RESET}{GRAY}{limit_str}{RESET}")
     if usage:
-        session = format_usage_session(usage)
-        weekly = format_usage_weekly(usage)
+        session = format_usage_session(usage, length=usage_bar_length)
+        weekly = format_usage_weekly(usage, length=usage_bar_length)
         if session:
             parts.append(session)
         if weekly:
