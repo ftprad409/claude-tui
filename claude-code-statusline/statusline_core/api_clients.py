@@ -269,6 +269,57 @@ def _color_for_ratio(ratio):
     return GREEN
 
 
+def _rgb(r, g, b):
+    return f"\033[38;2;{r};{g};{b}m"
+
+
+def _lerp_rgb(stops, t):
+    t = max(0.0, min(1.0, t))
+    for i in range(len(stops) - 1):
+        if t <= stops[i + 1][0]:
+            seg_t = (t - stops[i][0]) / (stops[i + 1][0] - stops[i][0])
+            r = int(stops[i][1] + (stops[i + 1][1] - stops[i][1]) * seg_t)
+            g = int(stops[i][2] + (stops[i + 1][2] - stops[i][2]) * seg_t)
+            b = int(stops[i][3] + (stops[i + 1][3] - stops[i][3]) * seg_t)
+            return _rgb(r, g, b)
+    return _rgb(stops[-1][1], stops[-1][2], stops[-1][3])
+
+
+def _build_modern_usage_bar(ratio, length):
+    ratio = max(0.0, min(ratio, 1.0))
+    precise_fill = ratio * length
+    full_cells = int(precise_fill)
+    remainder = precise_fill - full_cells
+    partials = "▏▎▍▌▋▊▉"
+    full_char = "▮"
+    empty_char = "▯"
+    stops = [
+        (0.00, 166, 227, 161),
+        (0.30, 148, 226, 213),
+        (0.55, 249, 226, 175),
+        (0.80, 250, 179, 135),
+        (1.00, 243, 139, 168),
+    ]
+    empty_color = "\033[38;2;55;59;80m"
+    head_color = "\033[38;2;214;226;240m"
+    parts = []
+    for i in range(length):
+        pos = i / max(length - 1, 1)
+        if i < full_cells:
+            parts.append(f"{_lerp_rgb(stops, pos)}{full_char}{RESET}")
+            continue
+        if i == full_cells and remainder > 0:
+            partial_idx = max(0, min(int(remainder * len(partials)) - 1, len(partials) - 1))
+            parts.append(f"{_lerp_rgb(stops, pos)}{partials[partial_idx]}{RESET}")
+            continue
+        parts.append(f"{empty_color}{empty_char}{RESET}")
+    if 0 < precise_fill < length and remainder == 0:
+        head_idx = min(full_cells, length - 1)
+        parts[head_idx] = f"{head_color}▌{RESET}"
+    core = "".join(parts)
+    return f"\033[38;2;90;95;120m▏{RESET}{core}\033[38;2;90;95;120m▕{RESET}"
+
+
 def _format_reset_time(iso_time):
     if not iso_time:
         return ""
@@ -296,9 +347,8 @@ def format_usage_session(usage_data, length=20):
     if pct is None:
         return ""
     ratio = min(pct / 100.0, 1.0)
-    filled = int(length * ratio)
     color = _color_for_ratio(ratio)
-    bar = f"{color}" + "█" * filled + f"{GRAY}" + "░" * (length - filled) + f"{RESET}"
+    bar = _build_modern_usage_bar(ratio, length)
     pct_str = f"{color}{int(pct):>3}%{RESET}"
     reset_str = (f" ↻ {_format_reset_time(five_hour.get('resets_at', ''))}").ljust(7)
     return f"{bar} {pct_str} {reset_str}"
@@ -314,9 +364,8 @@ def format_usage_weekly(usage_data, length=20):
     if pct is None:
         return ""
     ratio = min(pct / 100.0, 1.0)
-    filled = int(length * ratio)
     color = _color_for_ratio(ratio)
-    bar = f"{color}" + "█" * filled + f"{GRAY}" + "░" * (length - filled) + f"{RESET}"
+    bar = _build_modern_usage_bar(ratio, length)
     pct_str = f"{color}{int(pct):>3}%{RESET}{GRAY}w{RESET}"
     reset = _format_reset_time(seven_day.get("resets_at", ""))
     reset_str = (f" ↻ {reset}" if reset else "").ljust(7)

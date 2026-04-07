@@ -82,7 +82,7 @@ def build_sparkline(values, width=20):
     chars = []
     for v in values:
         if v is None:
-            chars.append(f"\033[38;2;243;139;168m▕{RESET}")
+            chars.append(f"\033[38;2;243;139;168m↓{RESET}")
             continue
         r = v / peak
         idx = max(0, min(int(r * (len(blocks) - 1)), len(blocks) - 1))
@@ -115,7 +115,13 @@ def _lerp_rgb(stops, t):
 
 
 def build_progress_bar(ratio, length=20, compact_ratio=None):
-    filled = int(length * min(ratio, 1.0))
+    ratio = max(0.0, min(ratio, 1.0))
+    precise_fill = ratio * length
+    full_cells = int(precise_fill)
+    remainder = precise_fill - full_cells
+    partials = "▏▎▍▌▋▊▉"
+    full_char = "▮"
+    empty_char = "▯"
     stops = [
         (0.00, 166, 227, 161),
         (0.30, 148, 226, 213),
@@ -123,10 +129,34 @@ def build_progress_bar(ratio, length=20, compact_ratio=None):
         (0.80, 250, 179, 135),
         (1.00, 243, 139, 168),
     ]
-    bar = "".join(
-        f"{_lerp_rgb(stops, i / max(length - 1, 1))}█{RESET}" if i < filled else f"\033[38;2;55;59;80m░{RESET}"
-        for i in range(length)
-    )
+    empty_color = "\033[38;2;55;59;80m"
+    head_color = "\033[38;2;214;226;240m"
+
+    bar_parts = []
+    for i in range(length):
+        pos = i / max(length - 1, 1)
+        if i < full_cells:
+            bar_parts.append(f"{_lerp_rgb(stops, pos)}{full_char}{RESET}")
+            continue
+        if i == full_cells and remainder > 0:
+            partial_idx = max(0, min(int(remainder * len(partials)) - 1, len(partials) - 1))
+            bar_parts.append(f"{_lerp_rgb(stops, pos)}{partials[partial_idx]}{RESET}")
+            continue
+        bar_parts.append(f"{empty_color}{empty_char}{RESET}")
+
+    # Subtle head marker on the active frontier for easier visual tracking.
+    if 0 < precise_fill < length and remainder == 0:
+        head_idx = min(full_cells, length - 1)
+        bar_parts[head_idx] = f"{head_color}▌{RESET}"
+
+    # Compact ceiling tick marker (when available) to show compaction threshold.
+    if compact_ratio and 0 < compact_ratio < 1:
+        tick_idx = min(max(int(compact_ratio * length), 0), length - 1)
+        if tick_idx >= full_cells:
+            bar_parts[tick_idx] = f"\033[38;2;140;145;170m┆{RESET}"
+
+    bar = "".join(bar_parts)
+    bar = f"\033[38;2;90;95;120m▏{RESET}{bar}\033[38;2;90;95;120m▕{RESET}"
     fill_of_ceiling = ratio / compact_ratio if compact_ratio and compact_ratio > 0 else ratio
     if fill_of_ceiling < 0.60:
         pct_color = GREEN
