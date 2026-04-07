@@ -273,12 +273,12 @@ def build_line1_parts(bar, tokens_str, limit_str, compact_prediction, model, spa
     if is_visible("line1", "context_bar"):
         ctx = f"{bar}"
         if is_visible("line1", "token_count"):
-            ctx += f" {CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
+            ctx += f" {YELLOW}⚡{RESET}{CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
         if compact_prediction and is_visible("line1", "compact_prediction"):
             ctx += f" {dim}⋮{RESET} {compact_prediction}"
         parts.append(ctx)
     elif is_visible("line1", "token_count"):
-        ctx = f"{CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
+        ctx = f"{YELLOW}⚡{RESET}{CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
         if compact_prediction and is_visible("line1", "compact_prediction"):
             ctx += f" {dim}⋮{RESET} {compact_prediction}"
         parts.append(ctx)

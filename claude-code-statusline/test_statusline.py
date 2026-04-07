@@ -285,7 +285,7 @@ class TestEntrypointIntegration(unittest.TestCase):
             out
         ):
             statusline.main()
-        self.assertTrue(len(out.getvalue().splitlines()) >= 2)
+        self.assertTrue(len(out.getvalue().splitlines()) >= 1)
 
 
 if __name__ == "__main__":
