@@ -9,6 +9,7 @@ python3 claudetui.py mode custom      # test configurator TUI
 python3 claudetui.py --help           # test dispatcher
 python3 claude-code-monitor/test_monitor.py -v   # monitor tests
 python3 claude-code-sniffer/test_sniffer.py -v   # sniffer tests
+PYTHONPATH=. python3 claude_tui_core/test_core.py -v   # core tests
 ```
 
 ## Testing
@@ -19,16 +20,10 @@ Only two tools have tests: monitor and sniffer. Run both before/after refactorin
 
 - **`python3 claudetui.py uninstall`** removes the repo directory! Use with caution - it deletes the git repo folder
 
-- **Usage API rate limiting**: The OAuth usage API frequently returns 429 errors. Solutions:
-  - Exponential backoff: 2min → 4min → 8min (max 10min)
-  - Force refresh when five_hour.resets_at time has passed
-  - Preserve cache on 429 only if cache has real usage data (five_hour exists)
+- **Usage API rate limiting**: The OAuth usage API frequently returns 429 errors. `claude_tui_core/network.py` handles exponential backoff (2min → 4min → 8min) and preserves cache.
 
-- **`MODEL_PRICING`** duplicated in 6 files: `statusline_core/constants.py`, `monitor/lib.py`, `commands/tui/lib.py`, `session-stats.py`, `session-manager.py`, `sniffer.py` (abbreviated keys). Keep in sync when updating pricing.
-- **`MODEL_CONTEXT_WINDOW`/`COMPACT_BUFFER`/`get_context_limit()`** duplicated in 3 files. Sync together.
-- **Status page fetcher parity**: `statusline_core/api_clients.py` (`fetch_api_status()`/`format_api_status()`) and `monitor.py` (`_fetch_api_status()`/`_format_api_status()`) should stay behaviorally aligned.
-- **Usage fetch + formatting** now live in `statusline_core/api_clients.py`: `fetch_usage()`, `format_usage_session()`, `format_usage_weekly()`. OAuth token from `~/.claude/.credentials.json` (`claudeAiOauth.accessToken`) or `CLAUDE_CODE_OAUTH_TOKEN` env.
-- **`usage`** (line2) and **`usage_weekly`** (line3) are separate configurable components in custom mode.
+- **Model Data**: Centralized in `claude_tui_core/models.py`. Keep in sync when updating pricing.
+- **Status Page / Usage**: Centralized logic in `claude_tui_core/network.py`.
 - **Widget API**: `widget_fn(frame, ratio) -> list[str]` must return exactly 3 rows.
 
 ## Local Development
@@ -50,5 +45,7 @@ To test statusline locally, edit `~/.claude/settings.json` to point to your repo
 
 - Entry point: `claudetui.py` (routes subcommands to tools)
 - Shared UI Library: `claude_tui_components/` (holds `build_progress_bar`, `build_sparkline`, ANSI colors, string utils)
+- Shared Logic Core: `claude_tui_core/` (models, network, settings/hot-reload)
 - Each tool in its own directory, self-contained with README
 - Config: `~/.claude/claudeui.json` (hot-reloads, no restart needed)
+- Tests: `claude_tui_core/test_core.py` (unit tests for core library)

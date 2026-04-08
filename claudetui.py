@@ -160,11 +160,12 @@ def main():
         if not os.path.exists(target_path):
             print(f"claudetui: hook script not found at {target_path}", file=sys.stderr)
             sys.exit(1)
+        # ── Dependency Injection ──────────────────────────────────────
+        # Inject our script directory into PYTHONPATH so sub-tools can find
+        # the shared libraries: claude_tui_components and claude_tui_core.
         env = os.environ.copy()
-        if "PYTHONPATH" in env:
-            env["PYTHONPATH"] = f"{SCRIPT_DIR}:{env['PYTHONPATH']}"
-        else:
-            env["PYTHONPATH"] = SCRIPT_DIR
+        curr_pp = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{SCRIPT_DIR}:{curr_pp}" if curr_pp else SCRIPT_DIR
         os.execvpe(sys.executable, [sys.executable, target_path] + args[1:], env)
 
     # Sniff dispatch: claudetui sniff [--port PORT] [claude args...]
@@ -235,7 +236,9 @@ def main():
             env["PYTHONPATH"] = f"{SCRIPT_DIR}:{env['PYTHONPATH']}"
         else:
             env["PYTHONPATH"] = SCRIPT_DIR
-        os.execvpe(sys.executable, [sys.executable, target_path] + prefix_args + args, env)
+        os.execvpe(
+            sys.executable, [sys.executable, target_path] + prefix_args + args, env
+        )
 
 
 if __name__ == "__main__":

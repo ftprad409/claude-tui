@@ -8,82 +8,26 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from claude_tui_core.models import (
+    MODEL_PRICING, 
+    MODEL_CONTEXT_WINDOW, 
+    DEFAULT_CONTEXT_LIMIT, 
+    COMPACT_BUFFER, 
+    get_context_limit
+)
+CONTEXT_LIMIT = DEFAULT_CONTEXT_LIMIT  # backward compat
+from claude_tui_core.settings import (
+    load_settings, 
+    get_setting, 
+    reset_settings_cache
+)
+
 # ── ANSI helpers ──────────────────────────────────────────────────────
 
 from claude_tui_components.utils import visible_len as _visible_len, truncate as _truncate_ansi, visual_rows as _visual_rows
 
 
-# ── Settings ──────────────────────────────────────────────────────────
-
-_SETTINGS_CACHE = None
-_SETTINGS_MTIME = 0
-
-
-def load_settings():
-    """Load shared settings from ~/.claude/claudeui.json.
-
-    Re-reads the file if it has been modified since last load,
-    so users can tweak settings while the monitor is running.
-    """
-    global _SETTINGS_CACHE, _SETTINGS_MTIME
-    path = os.path.join(os.path.expanduser("~"), ".claude", "claudeui.json")
-    try:
-        mtime = os.path.getmtime(path)
-        if _SETTINGS_CACHE is not None and mtime == _SETTINGS_MTIME:
-            return _SETTINGS_CACHE
-        with open(path, "r") as f:
-            _SETTINGS_CACHE = json.load(f)
-        _SETTINGS_MTIME = mtime
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        _SETTINGS_CACHE = {}
-    return _SETTINGS_CACHE
-
-
-def get_setting(*keys, default=None):
-    """Get a nested setting value. e.g. get_setting('sparkline', 'mode')."""
-    cfg = load_settings()
-    for key in keys:
-        if isinstance(cfg, dict):
-            cfg = cfg.get(key)
-        else:
-            return default
-    return cfg if cfg is not None else default
-
-
-def reset_settings_cache():
-    """Reset the settings cache so next load_settings() re-reads the file."""
-    global _SETTINGS_CACHE, _SETTINGS_MTIME
-    _SETTINGS_CACHE = None
-    _SETTINGS_MTIME = 0
-
-
-# ── Pricing and limits ────────────────────────────────────────────────
-
-MODEL_PRICING = {
-    # Claude 4.6 / 4.5  (cache_write = 1.25x input per Anthropic pricing)
-    "claude-opus-4-6": {"input": 15.0, "cache_read": 1.5, "cache_write": 18.75, "output": 75.0},
-    "claude-sonnet-4-6": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
-    "claude-haiku-4-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
-    # Claude 3.5
-    "claude-sonnet-3-5": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
-    "claude-haiku-3-5": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
-}
-# Context window sizes by model family
-MODEL_CONTEXT_WINDOW = {
-    "claude-opus-4": 1_000_000,   # 1M context via anthropic-beta flag
-}
-DEFAULT_CONTEXT_LIMIT = 200_000
-CONTEXT_LIMIT = DEFAULT_CONTEXT_LIMIT  # backward compat for tests
-# Compaction triggers when remaining capacity drops below this buffer
-COMPACT_BUFFER = 33_000
-
-
-def get_context_limit(model_id):
-    """Get context window size for a model ID."""
-    for key, limit in MODEL_CONTEXT_WINDOW.items():
-        if key in model_id:
-            return limit
-    return DEFAULT_CONTEXT_LIMIT
+# Pricing and settings now imported from claude_tui_core
 
 
 # ── ANSI codes ────────────────────────────────────────────────────────

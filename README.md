@@ -145,6 +145,10 @@ Customize behavior via `~/.claude/claudeui.json` (hot-reloads, no restart needed
 
 A centralized UI library containing all shared visual elements (progress bars, sparklines, string truncation utilities, and color sequences). It is dynamically injected via `PYTHONPATH` during subprocess execution, ensuring a single unified true-color aesthetic across the statusline, monitor dashboard, and interactive configurator (mode custom) without code duplication.
 
+### [claude_tui_core](./claude_tui_core/)
+
+The centralized domain logic layer following SOLID/SRP principles. It manages the single source of truth for Anthropic model data (pricing, context windows), handles all external HTTP communication (status page polling, OAuth usage tracking), and provides a unified configuration loader with high-performance hot-reloading.
+
 ### [claude-code-statusline](./claude-code-statusline/)
 
 Real-time status bar for Claude Code with context sparkline, session cost, cache ratio, thinking count, live tool trace, file edit tracking, and plan usage bars.

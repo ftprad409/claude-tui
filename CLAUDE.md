@@ -98,32 +98,23 @@ Claude Code hooks for automatic in-session context. Three hook scripts:
 - `claude-code-hooks/pre-edit-churn.py` — PreToolUse (Edit|Write): warns about high-churn files
 - Configured via `hooks` in `~/.claude/settings.json`
 
-### Shared Settings
+### Shared Settings (`claude_tui_core/settings.py`)
 
 - Config file: `~/.claude/claudeui.json` — shared between statusline and monitor
-- Hot-reloads: both tools re-read on file change, no restart needed
-- Settings: `sparkline.mode` (`"tail"` or `"merge"`), `sparkline.merge_size` (turns per bar, default: 2), `monitor.log_lines` (0–50, default: 8, 0 = off)
-- Status page: `status.enabled` (default: `true`), `status.ttl` (cache TTL in seconds, default: `120`, min: `30`), `status.show_when_operational` (default: `false`)
-- Config loader: `load_settings()` / `get_setting(*keys, default=...)` in each tool (statusline is self-contained; monitor imports from `lib.py`)
+- Hot-reloads: Core module re-reads on file change via `mtime` check, no restart needed
+- Loader: `load_settings()` / `get_setting(*keys, default=...)` in `claude_tui_core/settings.py`
 
-### Claude Status Page Integration
+### Claude Status Page Integration (`claude_tui_core/network.py`)
 
-- API: Atlassian Statuspage v2 at `https://status.claude.com/api/v2/summary.json` (public, no auth)
-- Cache: `~/.claude/api-status-cache.json` with configurable TTL (default 120s)
-- Statusline: shows indicator on line2 when any component is not operational (▲ degraded / ▲ outage)
-- Monitor: same indicator in header line; `i` hotkey opens detailed status overlay with all components + incidents
-- Fetcher is inlined in both statusline.py and monitor.py (same convention as MODEL_PRICING etc.)
+- API: Atlassian Statuspage v2 (`https://status.claude.com/api/v2/summary.json`)
+- Cache: `~/.claude/api-status-cache.json` with background refresh support
+- Indicator: shows status indicator on line2/monitor header when not operational
 
-### Plan Usage Integration
+### Plan Usage Integration (`claude_tui_core/network.py`)
 
-- API: OAuth usage endpoint at `https://api.anthropic.com/api/oauth/usage` (requires OAuth token)
-- Token sources: `CLAUDE_CODE_OAUTH_TOKEN` env, `~/.claude/.credentials.json` (`claudeAiOauth.accessToken`), macOS Keychain
-- Cache: `~/.claude/usage-cache.json` with configurable rate limit (default 60s)
-- Settings: `usage.enabled` (default: true), `usage.rate_limit` (seconds, default: 60)
-- Line 2: session usage bar (5-hour limit) with progress, percentage, and reset time
-- Line 3: weekly usage bar with progress, percentage, "w" suffix, and reset time
-- Fixed width formatting to prevent line jumping
-- Color coding: green (<60%), yellow (60-85%), orange (85-95%), red (>=95%)
+- API: OAuth usage endpoint (`https://api.anthropic.com/api/oauth/usage`)
+- Auth: Redundant token sources (Env, Credentials JSON, macOS Keychain)
+- Implementation: Centralized `fetch_usage()` and `format_usage_*` helpers
 
 ## Testing
 
@@ -171,15 +162,14 @@ python3 claudetui.py --help          # test dispatcher
 
 ## Gotchas
 
-- **Duplicated constants**: `MODEL_PRICING` exists in 5 places: `statusline_core/constants.py`, `monitor/lib.py`, `commands/tui/lib.py`, `session-stats.py`, and `session-manager.py`. The sniffer (`sniffer.py`) has a 6th copy using abbreviated model family keys. `MODEL_CONTEXT_WINDOW`, `COMPACT_BUFFER`, and `get_context_limit()` exist in 3 places: `statusline_core/transcript.py`, `monitor/lib.py`, and `commands/tui/lib.py`. All pricing dicts include `cache_write` (1.25x input). Keep all in sync when updating pricing or adding models.
-- **Duplicated fetcher**: `fetch_api_status()`/`format_api_status()` in `statusline_core/api_clients.py` and `_fetch_api_status()`/`_format_api_status()` in `monitor.py` implement the same status page behavior. Keep them in sync when changing status page logic.
-- **Transcript format**: Compaction entries use `{"type": "system", "subtype": "compact_boundary"}`. Thinking blocks use `{"type": "thinking"}` in assistant message content (token counts redacted by the API).
+- **`python3 claudetui.py uninstall`** removes the repo directory!
+- **OAuth Rate Limiting**: Usage API frequently returns 429. `claude_tui_core/network.py` handles exponential backoff (2min → 4min → 8min) and preserves cache.
 - **Widget API**: Widget functions have signature `widget_fn(frame, ratio) -> list[str]` returning exactly 3 rows.
+- **Model Registry**: Centralized in `claude_tui_core/models.py`. Sniffer uses a fuzzy-matching wrapper to support abbreviated model IDs.
 
-## Conventions
-
-- Each tool is self-contained in its own directory with a README.md (with the exception of shared UI components now located centrally in `claude_tui_components/`)
-- Shared TUI elements (progress bars, sparklines, string truncation, and colors) are centralized in `claude_tui_components/` and injected via `PYTHONPATH` during subprocess execution in `claudetui.py`.
+- Shared UI elements (progress bars, sparklines, string truncation, and colors) are centralized in `claude_tui_components/`.
+- Shared domain logic (models, pricing, network, settings) is centralized in `claude_tui_core/`.
+- Both core libraries are injected via `PYTHONPATH` during subprocess execution in `claudetui.py`.
 - Python 3.13+, stdlib only — no external dependencies
 - All tools parse Claude Code's JSONL transcript format from `~/.claude/projects/`
 - MIT licensed

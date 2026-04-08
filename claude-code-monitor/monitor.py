@@ -52,117 +52,17 @@ _original_termios = None
 
 # ── Claude status page (Atlassian Statuspage v2 API) ────────────────
 
-_STATUS_CACHE_PATH = os.path.join(
-    os.path.expanduser("~"), ".claude", "api-status-cache.json"
+from claude_tui_core.network import (
+    fetch_api_status as _core_fetch_api_status,
+    format_api_status as _format_api_status
 )
 
-
 def _fetch_api_status():
-    """Get Claude API status, using a file-based cache with TTL.
-
-    Returns dict with keys: status, components, incidents — or None.
-    Cache is shared across statusline and monitor invocations.
-    """
-    if not get_setting("status", "enabled", default=True):
-        return None
-
-    ttl = max(30, get_setting("status", "ttl", default=120))
-    cache = None
-
-    # Read cache
-    try:
-        with open(_STATUS_CACHE_PATH, "r") as f:
-            cache = json.load(f)
-        if time.time() - cache.get("fetched_at", 0) < ttl:
-            return cache
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        pass
-
-    # Fetch fresh in background thread to avoid blocking curses loop
-    def _do_fetch():
-        try:
-            import http.client
-            import ssl
-            ctx = ssl.create_default_context()
-            conn = http.client.HTTPSConnection(
-                "status.claude.com", timeout=2, context=ctx
-            )
-            try:
-                conn.request("GET", "/api/v2/summary.json",
-                              headers={"Accept": "application/json"})
-                resp = conn.getresponse()
-                if resp.status == 200:
-                    data = json.loads(resp.read())
-                    result = {
-                        "fetched_at": time.time(),
-                        "status": data.get("status", {}).get("indicator", "none"),
-                        "components": {
-                            c["name"]: c["status"]
-                            for c in data.get("components", [])
-                        },
-                        "incidents": [
-                            {"name": i["name"], "status": i["status"],
-                             "impact": i["impact"]}
-                            for i in data.get("incidents", [])
-                        ],
-                    }
-                    os.makedirs(os.path.dirname(_STATUS_CACHE_PATH), exist_ok=True)
-                    tmp = _STATUS_CACHE_PATH + ".tmp"
-                    with open(tmp, "w") as f:
-                        json.dump(result, f)
-                    os.replace(tmp, _STATUS_CACHE_PATH)
-            finally:
-                conn.close()
-        except Exception:
-            pass
-
-    t = threading.Thread(target=_do_fetch, daemon=True)
-    t.start()
-
-    return cache  # return stale cache while refresh happens in background
+    """Delegate to core with background refresh enabled."""
+    return _core_fetch_api_status(background=True)
 
 
-def _format_api_status(status_data):
-    """Format API status for display. Returns colored string or empty."""
-    if not status_data:
-        return ""
-
-    show_when_ok = get_setting("status", "show_when_operational", default=False)
-    components = status_data.get("components", {})
-    overall = status_data.get("status", "none")
-
-    severity_order = ["operational", "degraded_performance",
-                      "partial_outage", "major_outage"]
-    worst = "operational"
-    worst_name = ""
-    for name, st in components.items():
-        if st in severity_order:
-            if severity_order.index(st) > severity_order.index(worst):
-                worst = st
-                worst_name = name
-
-    if worst == "operational" and overall == "none":
-        if show_when_ok:
-            return f"{GREEN}\u25cf{RESET} {GRAY}ok{RESET}"
-        return ""
-
-    if worst == "degraded_performance":
-        return f"{YELLOW}\u25b2 degraded{RESET}"
-    elif worst == "partial_outage":
-        label = "Code partial" if "Code" in worst_name else "partial outage"
-        return f"{ORANGE}\u25b2 {label}{RESET}"
-    elif worst == "major_outage":
-        label = "Code outage" if "Code" in worst_name else "outage"
-        return f"{RED}\u25b2 {label}{RESET}"
-
-    if overall == "minor":
-        return f"{YELLOW}\u25b2 degraded{RESET}"
-    elif overall == "major":
-        return f"{ORANGE}\u25b2 outage{RESET}"
-    elif overall == "critical":
-        return f"{RED}\u25b2 outage{RESET}"
-
-    return ""
+# _format_api_status is now imported from core
 
 
 # ── Dashboard rendering ─────────────────────────────────────────────

@@ -26,6 +26,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from claude_tui_core.models import MODEL_PRICING, get_model_pricing_fuzzy as _match_pricing
+
 # ── Constants ────────────────────────────────────────────────────────
 
 UPSTREAM_HOST = "api.anthropic.com"
@@ -56,26 +58,10 @@ LOGO_LINES = [
     (f" {BOLD} ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝", f"{LOGO_GREEN}   ╚═╝    ╚═════╝ ╚═╝{RESET}"),
 ]
 
-# Pricing (per 1M tokens)
-MODEL_PRICING = {
-    "claude-opus-4": {"input": 15.0, "cache_read": 1.5, "cache_write": 18.75, "output": 75.0},
-    "claude-sonnet-4": {"input": 3.0, "cache_read": 0.30, "cache_write": 3.75, "output": 15.0},
-    "claude-haiku-4": {"input": 0.80, "cache_read": 0.08, "cache_write": 1.0, "output": 4.0},
-}
+# Pricing now imported from core via fuzzy matcher
 
 # Shared SSL context — reused across all requests (avoids reloading CA bundle)
 _SSL_CTX = ssl.create_default_context()
-
-
-def _match_pricing(model_id):
-    """Match a model ID to pricing tier."""
-    if not model_id:
-        return MODEL_PRICING["claude-sonnet-4"]
-    m = model_id.lower()
-    for key in MODEL_PRICING:
-        if key.replace("-", "") in m.replace("-", ""):
-            return MODEL_PRICING[key]
-    return MODEL_PRICING["claude-sonnet-4"]
 
 
 def _format_tokens(n):

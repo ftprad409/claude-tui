@@ -64,11 +64,11 @@ class TestMatchPricing(unittest.TestCase):
 
     def test_unknown_defaults_to_sonnet(self):
         p = _match_pricing("unknown-model")
-        self.assertEqual(p, MODEL_PRICING["claude-sonnet-4"])
+        self.assertEqual(p, MODEL_PRICING["claude-sonnet-4-6"])
 
     def test_empty_defaults_to_sonnet(self):
         p = _match_pricing("")
-        self.assertEqual(p, MODEL_PRICING["claude-sonnet-4"])
+        self.assertEqual(p, MODEL_PRICING["claude-sonnet-4-6"])
 
 
 class TestCalcCost(unittest.TestCase):

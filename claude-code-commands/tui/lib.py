@@ -8,51 +8,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-MODEL_PRICING: dict[str, dict[str, float]] = {
-    "claude-opus-4-6": {
-        "input": 15.0,
-        "cache_read": 1.5,
-        "cache_write": 18.75,
-        "output": 75.0,
-    },
-    "claude-sonnet-4-6": {
-        "input": 3.0,
-        "cache_read": 0.30,
-        "cache_write": 3.75,
-        "output": 15.0,
-    },
-    "claude-haiku-4-5": {
-        "input": 0.80,
-        "cache_read": 0.08,
-        "cache_write": 1.0,
-        "output": 4.0,
-    },
-    "claude-sonnet-3-5": {
-        "input": 3.0,
-        "cache_read": 0.30,
-        "cache_write": 3.75,
-        "output": 15.0,
-    },
-    "claude-haiku-3-5": {
-        "input": 0.80,
-        "cache_read": 0.08,
-        "cache_write": 1.0,
-        "output": 4.0,
-    },
-}
-MODEL_CONTEXT_WINDOW: dict[str, int] = {
-    "claude-opus-4": 1_000_000,
-}
-DEFAULT_CONTEXT_LIMIT: int = 200_000
-CONTEXT_LIMIT: int = DEFAULT_CONTEXT_LIMIT
-
-
-def get_context_limit(model_id: str) -> int:
-    """Get context window size for a model ID."""
-    for key, limit in MODEL_CONTEXT_WINDOW.items():
-        if key in model_id:
-            return limit
-    return DEFAULT_CONTEXT_LIMIT
+from claude_tui_core.models import (
+    MODEL_PRICING,
+    MODEL_CONTEXT_WINDOW,
+    DEFAULT_CONTEXT_LIMIT,
+    get_context_limit
+)
 
 
 def find_transcript(cwd: Optional[str] = None) -> Optional[str]:
