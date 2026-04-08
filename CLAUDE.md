@@ -178,7 +178,8 @@ python3 claudetui.py --help          # test dispatcher
 
 ## Conventions
 
-- Each tool is self-contained in its own directory with a README.md
+- Each tool is self-contained in its own directory with a README.md (with the exception of shared UI components now located centrally in `claude_tui_components/`)
+- Shared TUI elements (progress bars, sparklines, string truncation, and colors) are centralized in `claude_tui_components/` and injected via `PYTHONPATH` during subprocess execution in `claudetui.py`.
 - Python 3.13+, stdlib only — no external dependencies
 - All tools parse Claude Code's JSONL transcript format from `~/.claude/projects/`
 - MIT licensed

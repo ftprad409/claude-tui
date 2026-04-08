@@ -141,6 +141,10 @@ Customize behavior via `~/.claude/claudeui.json` (hot-reloads, no restart needed
 
 ## Tools
 
+### [claude_tui_components](./claude_tui_components/)
+
+A centralized UI library containing all shared visual elements (progress bars, sparklines, string truncation utilities, and color sequences). It is dynamically injected via `PYTHONPATH` during subprocess execution, ensuring a single unified true-color aesthetic across the statusline, monitor dashboard, and interactive configurator (mode custom) without code duplication.
+
 ### [claude-code-statusline](./claude-code-statusline/)
 
 Real-time status bar for Claude Code with context sparkline, session cost, cache ratio, thinking count, live tool trace, file edit tracking, and plan usage bars.

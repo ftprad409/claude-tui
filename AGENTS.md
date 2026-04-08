@@ -49,5 +49,6 @@ To test statusline locally, edit `~/.claude/settings.json` to point to your repo
 ## Key Files
 
 - Entry point: `claudetui.py` (routes subcommands to tools)
+- Shared UI Library: `claude_tui_components/` (holds `build_progress_bar`, `build_sparkline`, ANSI colors, string utils)
 - Each tool in its own directory, self-contained with README
 - Config: `~/.claude/claudeui.json` (hot-reloads, no restart needed)
