@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 
-_FALLBACK_VERSION = "0.7.5"
+_FALLBACK_VERSION = "0.8.0"
 
 
 def _get_version():
@@ -160,7 +160,12 @@ def main():
         if not os.path.exists(target_path):
             print(f"claudetui: hook script not found at {target_path}", file=sys.stderr)
             sys.exit(1)
-        os.execvp(sys.executable, [sys.executable, target_path] + args[1:])
+        env = os.environ.copy()
+        if "PYTHONPATH" in env:
+            env["PYTHONPATH"] = f"{SCRIPT_DIR}:{env['PYTHONPATH']}"
+        else:
+            env["PYTHONPATH"] = SCRIPT_DIR
+        os.execvpe(sys.executable, [sys.executable, target_path] + args[1:], env)
 
     # Sniff dispatch: claudetui sniff [--port PORT] [claude args...]
     if cmd == "sniff":
@@ -225,7 +230,12 @@ def main():
         os.environ["INSTALL_DIR"] = SCRIPT_DIR
         os.execvp("bash", ["bash", target_path] + prefix_args + args)
     else:
-        os.execvp(sys.executable, [sys.executable, target_path] + prefix_args + args)
+        env = os.environ.copy()
+        if "PYTHONPATH" in env:
+            env["PYTHONPATH"] = f"{SCRIPT_DIR}:{env['PYTHONPATH']}"
+        else:
+            env["PYTHONPATH"] = SCRIPT_DIR
+        os.execvpe(sys.executable, [sys.executable, target_path] + prefix_args + args, env)
 
 
 if __name__ == "__main__":

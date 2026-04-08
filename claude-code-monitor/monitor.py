@@ -45,6 +45,7 @@ from chart import (
     _build_segments, _render_horizontal_chart, _render_vertical_chart,
     show_efficiency_chart, run_standalone as _run_chart_standalone,
 )
+from claude_tui_components.widgets import build_progress_bar, build_sparkline
 
 _original_termios = None
 
@@ -181,70 +182,7 @@ def color_ratio(ratio, compact_ratio=None):
     return RED
 
 
-def build_bar(ratio, width=30, compact_ratio=None):
-    """Build a colored progress bar."""
-    filled = int(width * min(ratio, 1.0))
-    bar = "█" * filled + "░" * (width - filled)
-    return f"{color_ratio(ratio, compact_ratio)}{bar}{RESET}"
 
-
-def build_sparkline(values, width=50):
-    """Build colored sparkline showing per-turn token spend.
-
-    Scaled relative to the peak value so the shape reveals
-    which turns were expensive vs cheap.
-    """
-    if not values:
-        return ""
-    # Keep only the last 3 compaction markers; replace older ones with 0
-    none_indices = [i for i, v in enumerate(values) if v is None]
-    keep_set = set(none_indices[-3:])
-    cleaned = []
-    for i, v in enumerate(values):
-        if v is None and i not in keep_set:
-            cleaned.append(0)
-        else:
-            cleaned.append(v)
-    values = cleaned
-
-    # Display mode: "tail" (last N turns) or "merge" (downsample all)
-    mode = get_setting("sparkline", "mode", default="tail")
-    if mode == "merge":
-        merge_size = get_setting("sparkline", "merge_size", default=2)
-        merged = []
-        for i in range(0, len(values), merge_size):
-            bucket = values[i:i + merge_size]
-            if None in bucket:
-                merged.append(None)
-            else:
-                merged.append(sum(v for v in bucket if v is not None))
-        values = merged
-        if len(values) > width:
-            values = values[-width:]
-    else:
-        if len(values) > width:
-            values = values[-width:]
-
-    blocks = "▁▂▃▄▅▆▇█"
-    peak = max((v for v in values if v is not None and v > 0), default=1)
-    scale = peak if peak > 0 else 1
-    chars = []
-    for v in values:
-        if v is None:
-            chars.append(f"{MAGENTA}↓{RESET}")
-            continue
-        r = v / scale
-        idx = max(0, min(int(r * (len(blocks) - 1)), len(blocks) - 1))
-        if r < 0.25:
-            color = GREEN
-        elif r < 0.50:
-            color = CYAN
-        elif r < 0.75:
-            color = YELLOW
-        else:
-            color = ORANGE
-        chars.append(f"{color}{blocks[idx]}{RESET}")
-    return "".join(chars)
 
 
 def render_matrix_header(frame, width=60, active=True):
@@ -289,7 +227,7 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     duration = format_duration_live(r["start_time"])
     w = min(term_width - 2, 120)  # content width, cap at 120
     bar_width = max(20, min(w - 30, 50))
-    bar = build_bar(ratio, bar_width, compact_ratio=compact_ratio)
+    bar = build_progress_bar(ratio, bar_width, compact_ratio=compact_ratio)
     spark_width = max(20, min(w - 10, 80))
     sparkline = build_sparkline(r["context_history"], spark_width)
 
@@ -385,7 +323,7 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
 
     # Context section
     lines.append(f"  {BOLD}CONTEXT{RESET}")
-    lines.append(f"  {bar}  {color_ratio(ratio, compact_ratio)}{ratio * 100:.1f}%{RESET}  {CYAN}{format_tokens(int(ctx_used))}{RESET}{DIM}/{RESET}{GRAY}{format_tokens(ctx_limit)}{RESET}")
+    lines.append(f"  {bar}  {CYAN}{format_tokens(int(ctx_used))}{RESET}{DIM}/{RESET}{GRAY}{format_tokens(ctx_limit)}{RESET}")
     lines.append(f"  {sparkline}")
     compact_line = f"  {DIM}Compactions:{RESET} {CYAN}{r['compact_count']}{RESET}  {DIM}│{RESET}  {DIM}Turns left:{RESET} {turns_left}  {DIM}│{RESET}  {DIM}Since compact:{RESET} {CYAN}{r['turns_since_compact']}{RESET}"
 

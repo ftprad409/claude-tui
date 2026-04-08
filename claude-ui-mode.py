@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 """ClaudeTUI — statusline mode switcher and component configurator."""
 
-import curses
 import json
 import os
 import sys
+
+from claude_tui_components import (
+    build_progress_bar, build_sparkline,
+    RESET, BOLD, DIM, GREEN, RED, CYAN, YELLOW, MAGENTA, LOGO_GREEN, GRAY, WHITE,
+    CLEAR, HIDE_CURSOR, SHOW_CURSOR, ALT_SCREEN_ON, ALT_SCREEN_OFF
+)
+import select
+import termios
+import tty
 
 
 SETTINGS_PATH = os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
@@ -170,86 +178,52 @@ def set_mode(mode):
 
 # ── Config (custom components) ─────────────────────────────────────
 
-
-# (id, line, name, preview_text, color_pair_index)
-# color pairs: 1=green, 2=red, 3=cyan, 4=yellow, 5=magenta, 0=white/default
 COMPONENTS = [
-    (
-        "context_bar",
-        "line1",
-        "Context bar",
-        "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591 42% 112k/1.0M",
-        1,
-    ),
-    ("model", "line1", "Model", "Opus 4.6", 5),
-    ("token_count", "line1", "Token count", "65.5k/200.0k", 3),
-    ("compact_prediction", "line1", "Compact predict", "~24 turns left", 3),
-    ("sparkline", "line1", "Sparkline", "sparkline", 3),
-    ("cost", "line1", "Cost", "$2.34", 4),
-    ("duration", "line1", "Duration", "12m", 0),
-    ("compact_count", "line1", "Compact count", "0x compact", 3),
-    ("efficiency", "line1", "Efficiency", "92% eff", 1),
-    ("session_id", "line1", "Session ID", "#a1b2c3d4", 0),
+    ("context_bar", "line1", "Context bar", lambda: build_progress_bar(0.42, 20, 0.83, "C") + f" {CYAN}112k{RESET}{DIM}/{RESET}{GRAY}1.0M{RESET}", 1),
+    ("model", "line1", "Model", lambda: f"{BOLD}{MAGENTA}Opus 4.6{RESET}", 5),
+    ("token_count", "line1", "Token count", lambda: f"{YELLOW}⚡{RESET}{CYAN}65.5k{RESET}{DIM}/{RESET}{GRAY}200.0k{RESET}", 3),
+    ("compact_prediction", "line1", "Compact predict", lambda: f"{DIM}ETA 24k{RESET}", 3),
+    ("sparkline", "line1", "Sparkline", lambda: build_sparkline([1, 2, 8, 3, 4, None, 10, 5, 3, 2, 4], 20), 3),
+    ("cost", "line1", "Cost", lambda: f"{YELLOW}$2.34{RESET}", 4),
+    ("duration", "line1", "Duration", lambda: f"{WHITE}12m{RESET}", 0),
+    ("compact_count", "line1", "Compact count", lambda: f"{CYAN}1{RESET}{DIM}x{RESET}", 3),
+    ("efficiency", "line1", "Efficiency", lambda: f"{GREEN}92%{RESET}", 1),
+    ("session_id", "line1", "Session ID", lambda: f"{DIM}#{RESET}{GRAY}a1b2c3d4{RESET}", 0),
     (
         "usage",
         "line2",
         "Plan % (session)",
-        "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2591\u2591 15% \u21bb 2h",
+        lambda: build_progress_bar(0.15, 20),
         1,
     ),
-    ("cwd", "line2", "Directory", os.path.basename(os.getcwd()), 0),
-    ("git_branch", "line2", "Git branch", "main +42 -17", 3),
-    ("turns", "line2", "Turns", "18 turns", 3),
-    ("files", "line2", "Files", "5 files", 3),
-    ("errors", "line2", "Errors", "0 err", 1),
-    ("cache", "line2", "Cache %", "82% cache", 3),
-    ("thinking", "line2", "Thinking", "4x think", 5),
-    ("cost_per_turn", "line2", "Cost/turn", "~$0.13/turn", 4),
-    ("agents", "line2", "Agents", "2 agents", 3),
-    ("api_status", "line2", "API status", "\u25b2 degraded", 4),
+    ("cwd", "line2", "Directory", lambda: f"{GREEN}{os.path.basename(os.getcwd())}{RESET}", 0),
+    ("git_branch", "line2", "Git branch", lambda: f"{GREEN}⎇ main{RESET} {GREEN}+42{RESET} {RED}-17{RESET}", 3),
+    ("turns", "line2", "Turns", lambda: f"{GREEN}18{RESET} {DIM}turns{RESET}", 3),
+    ("files", "line2", "Files", lambda: f"{CYAN}5{RESET} {DIM}files{RESET}", 3),
+    ("errors", "line2", "Errors", lambda: f"{GREEN}0{RESET} {DIM}err{RESET}", 1),
+    ("cache", "line2", "Cache %", lambda: f"{GREEN}82%{RESET} {DIM}cache{RESET}", 3),
+    ("thinking", "line2", "Thinking", lambda: f"{GREEN}4{RESET} {DIM}think{RESET}", 5),
+    ("cost_per_turn", "line2", "Cost/turn", lambda: f"{YELLOW}~$0.13/turn{RESET}", 4),
+    ("agents", "line2", "Agents", lambda: f"{CYAN}2{RESET} {DIM}agents{RESET}", 3),
+    ("api_status", "line2", "API status", lambda: f"{YELLOW}▲ degraded{RESET}", 4),
     (
         "usage_weekly",
         "line3",
         "Plan % (weekly)",
-        "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2591\u2591 73%w \u21bb 3h",
+        lambda: build_progress_bar(0.73, 20),
         1,
     ),
     (
         "tool_trace",
         "line3",
         "Tool trace",
-        "read \u2192 edit \u2192 bash \u2192 edit",
+        lambda: f"{GRAY}read{RESET} {GREEN}utils.py{RESET} {GRAY}→{RESET} {GRAY}bash{RESET} {GREEN}ls{RESET}",
         0,
     ),
-    ("file_edits", "line3", "File edits", "statusline.py\u00d73 README.md\u00d71", 0),
+    ("file_edits", "line3", "File edits", lambda: f"{YELLOW}statusline.py{RESET}{GRAY}×3{RESET} {YELLOW}README.md{RESET}{GRAY}×1{RESET}", 0),
 ]
 
 COMPONENT_IDS = {c[0] for c in COMPONENTS}
-
-# Sparkline preview: (char, color_pair) matching statusline.py colors
-# <0.25 green(1), <0.50 cyan(3), <0.75 yellow(4), >=0.75 red(2)
-SPARKLINE_PREVIEW = [
-    ("\u2584", 3),
-    ("\u2581", 1),
-    ("\u2586", 4),
-    ("\u2583", 3),
-    ("\u2581", 1),
-    ("\u2583", 1),
-    ("\u2581", 1),
-    ("\u2585", 3),
-    ("\u2588", 2),
-    ("\u2581", 1),
-    ("\u2581", 1),
-    ("\u2581", 1),
-    ("\u2585", 3),
-    ("\u2583", 3),
-    ("\u2585", 3),
-    ("\u2582", 1),
-    ("\u2581", 1),
-    ("\u2582", 1),
-    ("\u2583", 1),
-    ("\u2581", 1),
-]
 
 WIDGETS = ["matrix", "hex", "bars", "progress", "none"]
 
@@ -374,35 +348,30 @@ def build_menu():
     return items
 
 
-def interactive_curses(custom):
+def interactive_configurator(custom):
     menu = build_menu()
     selectable = [i for i, m in enumerate(menu) if m["type"] != "header"]
     cursor_idx = 0
     preset_names = list(PRESETS.keys()) + ["custom"]
-    preset_idx = len(preset_names) - 1  # start on "custom"
+    preset_idx = len(preset_names) - 1
 
-    def draw(stdscr):
-        nonlocal cursor_idx, preset_idx
-        curses.curs_set(0)
-        curses.start_color()
-        curses.use_default_colors()
-        curses.init_pair(1, curses.COLOR_GREEN, -1)
-        curses.init_pair(2, curses.COLOR_RED, -1)
-        curses.init_pair(3, curses.COLOR_CYAN, -1)
-        curses.init_pair(4, curses.COLOR_YELLOW, -1)
-        curses.init_pair(5, curses.COLOR_MAGENTA, -1)
-        # Pair 6: vivid green for logo — use 256-color 46 if available
-        if curses.COLORS >= 256:
-            curses.init_pair(6, 46, -1)
-        else:
-            curses.init_pair(6, curses.COLOR_GREEN, -1)
-
+    import tty
+    import termios
+    import select
+    
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    
+    try:
+        tty.setraw(fd)
+        sys.stdout.write(ALT_SCREEN_ON)
+        sys.stdout.write(HIDE_CURSOR)
+        sys.stdout.flush()
+        
         while True:
-            stdscr.erase()
-            h, w = stdscr.getmaxyx()
-            widget = get_widget(custom)
-
-            # ASCII art title — "Claude" white, "UI" green
+            sys.stdout.write(CLEAR)
+            
+            # Draw logo
             logo_claude = [
                 " ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗",
                 "██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝",
@@ -419,194 +388,112 @@ def interactive_curses(custom):
                 "   ██║   ╚██████╔╝██║",
                 "   ╚═╝    ╚═════╝ ╚═╝",
             ]
-            x = 2
-            try:
-                for i, (cl, ui) in enumerate(zip(logo_claude, logo_ui)):
-                    stdscr.addstr(1 + i, x, cl, curses.A_BOLD)
-                    stdscr.addstr(
-                        1 + i, x + len(cl), ui, curses.color_pair(6) | curses.A_BOLD
-                    )
-            except curses.error:
-                pass
-
-            subtitle = "Statusline Configurator"
-            try:
-                stdscr.addstr(8, x + 2, subtitle, curses.A_DIM)
-            except curses.error:
-                pass
-
-            # Hints
-            row = 10
-            try:
-                stdscr.addstr(row, x, "\u2191\u2193", curses.color_pair(3))
-                stdscr.addstr(" navigate  ")
-                stdscr.addstr("Space", curses.color_pair(3))
-                stdscr.addstr(" toggle  ")
-                stdscr.addstr("\u2190\u2192", curses.color_pair(3))
-                stdscr.addstr(" widget/preset  ")
-                stdscr.addstr("s", curses.color_pair(3))
-                stdscr.addstr(" save  ")
-                stdscr.addstr("q", curses.color_pair(3))
-                stdscr.addstr(" quit")
-            except curses.error:
-                pass
-
-            row = 12
+            
+            for i, (cl, ui) in enumerate(zip(logo_claude, logo_ui)):
+                sys.stdout.write(f"\033[{i+2};3H{WHITE}{BOLD}{cl}{LOGO_GREEN}{BOLD}{ui}{RESET}")
+                
+            sys.stdout.write(f"\033[9;5H{DIM}Statusline Configurator{RESET}")
+            sys.stdout.write(f"\033[11;3H{CYAN}↑↓{RESET} navigate  {CYAN}Space{RESET} toggle  {CYAN}←→{RESET} preset  {CYAN}s{RESET} save  {CYAN}q{RESET} quit")
+            
+            widget = get_widget(custom)
             current_sel = selectable[cursor_idx]
-
+            row = 13
+            
             for idx, item in enumerate(menu):
-                if row >= h - 1:
-                    break
-
                 is_selected = idx == current_sel
-
+                sys.stdout.write(f"\033[{row};3H")
+                
                 if item["type"] == "header":
                     if item["label"]:
-                        try:
-                            stdscr.addstr(row, x, item["label"], curses.A_BOLD)
-                        except curses.error:
-                            pass
+                        sys.stdout.write(f"{BOLD}{item['label']}{RESET}")
                     row += 1
                     continue
-
+                    
+                sel_prefix = f"{CYAN}{BOLD}▸ {RESET}" if is_selected else "  "
+                sys.stdout.write(sel_prefix)
+                
                 if item["type"] == "component":
                     enabled = get_toggle(custom, item["comp_id"], item["line"])
-                    mark = "\u2713" if enabled else "\u2717"
-                    mark_color = (
-                        curses.color_pair(1) if enabled else curses.color_pair(2)
-                    )
-                    preview_attr = (
-                        curses.color_pair(item["color"]) | curses.A_BOLD
-                        if enabled
-                        else curses.A_DIM
-                    )
-
-                    try:
-                        if is_selected:
-                            stdscr.addstr(
-                                row, x, "\u25b8 ", curses.color_pair(3) | curses.A_BOLD
-                            )
-                        else:
-                            stdscr.addstr(row, x, "  ")
-                        stdscr.addstr(mark + " ", mark_color | curses.A_BOLD)
-                        stdscr.addstr(
-                            f"{item['name']:<18s}", curses.A_BOLD if is_selected else 0
-                        )
-                        if item["comp_id"] == "sparkline":
-                            for ch, cp in SPARKLINE_PREVIEW:
-                                attr = (
-                                    curses.color_pair(cp) | curses.A_BOLD
-                                    if enabled
-                                    else curses.A_DIM
-                                )
-                                stdscr.addstr(ch, attr)
-                        else:
-                            stdscr.addstr(item["preview"], preview_attr)
-                    except curses.error:
-                        pass
+                    mark = f"{GREEN}✓{RESET}" if enabled else f"{RED}✗{RESET}"
+                    name_attr = BOLD if is_selected else ""
+                    sys.stdout.write(f"{mark} {name_attr}{item['name']:<18s}{RESET}")
+                    
+                    prev_str = item["preview"]()
+                    if enabled:
+                        sys.stdout.write(f"{BOLD}{prev_str}{RESET}")
+                    else:
+                        import re
+                        clean = re.sub(r'\033\[[0-9;]+m', '', prev_str)
+                        sys.stdout.write(f"{DIM}{clean}{RESET}")
                     row += 1
-
+                    
                 elif item["type"] == "widget":
-                    try:
-                        if is_selected:
-                            stdscr.addstr(
-                                row, x, "\u25b8 ", curses.color_pair(3) | curses.A_BOLD
-                            )
+                    sys.stdout.write(f"{(BOLD if is_selected else '')}Widget: {RESET}{CYAN}{BOLD}◂ {RESET}")
+                    for j, wn in enumerate(WIDGETS):
+                        if j > 0:
+                            sys.stdout.write(f"{DIM}  {RESET}")
+                        if wn == widget:
+                            sys.stdout.write(f"{CYAN}{BOLD}[{wn}]{RESET}")
                         else:
-                            stdscr.addstr(row, x, "  ")
-                        stdscr.addstr("Widget: ", curses.A_BOLD if is_selected else 0)
-                        stdscr.addstr("\u25c2 ", curses.color_pair(3) | curses.A_BOLD)
-                        for j, wn in enumerate(WIDGETS):
-                            if j > 0:
-                                stdscr.addstr("  ", curses.A_DIM)
-                            if wn == widget:
-                                stdscr.addstr(
-                                    f"[{wn}]", curses.color_pair(3) | curses.A_BOLD
-                                )
-                            else:
-                                stdscr.addstr(wn, curses.A_DIM)
-                        stdscr.addstr(" \u25b8", curses.color_pair(3) | curses.A_BOLD)
-                    except curses.error:
-                        pass
+                            sys.stdout.write(f"{DIM}{wn}{RESET}")
+                    sys.stdout.write(f" {CYAN}{BOLD}▸{RESET}")
                     row += 1
-
+                    
                 elif item["type"] == "preset":
-                    try:
-                        if is_selected:
-                            stdscr.addstr(
-                                row, x, "\u25b8 ", curses.color_pair(3) | curses.A_BOLD
-                            )
+                    sys.stdout.write(f"{(BOLD if is_selected else '')}Preset: {RESET}{CYAN}{BOLD}◂ {RESET}")
+                    for j, name in enumerate(preset_names):
+                        if j > 0:
+                            sys.stdout.write(f"{DIM}  {RESET}")
+                        if j == preset_idx:
+                            sys.stdout.write(f"{CYAN}{BOLD}[{name}]{RESET}")
                         else:
-                            stdscr.addstr(row, x, "  ")
-                        stdscr.addstr("Preset: ", curses.A_BOLD if is_selected else 0)
-                        stdscr.addstr("\u25c2 ", curses.color_pair(3) | curses.A_BOLD)
-                        for j, name in enumerate(preset_names):
-                            if j > 0:
-                                stdscr.addstr("  ", curses.A_DIM)
-                            if j == preset_idx:
-                                stdscr.addstr(
-                                    f"[{name}]", curses.color_pair(3) | curses.A_BOLD
-                                )
-                            else:
-                                stdscr.addstr(name, curses.A_DIM)
-                        stdscr.addstr(" \u25b8", curses.color_pair(3) | curses.A_BOLD)
-                    except curses.error:
-                        pass
+                            sys.stdout.write(f"{DIM}{name}{RESET}")
+                    sys.stdout.write(f" {CYAN}{BOLD}▸{RESET}")
                     row += 1
-
+                    
                 elif item["type"] == "buffer":
                     buf_val = custom.get("buffer", 30)
-                    try:
-                        if is_selected:
-                            stdscr.addstr(
-                                row, x, "\u25b8 ", curses.color_pair(3) | curses.A_BOLD
-                            )
-                        else:
-                            stdscr.addstr(row, x, "  ")
-                        stdscr.addstr("Buffer: ", curses.A_BOLD if is_selected else 0)
-                        stdscr.addstr("\u25c2 ", curses.color_pair(3) | curses.A_BOLD)
-                        stdscr.addstr(
-                            f"{buf_val}", curses.color_pair(3) | curses.A_BOLD
-                        )
-                        stdscr.addstr(" \u25b8", curses.color_pair(3) | curses.A_BOLD)
-                        stdscr.addstr(f"  chars from edge", curses.A_DIM)
-                    except curses.error:
-                        pass
+                    sys.stdout.write(f"{(BOLD if is_selected else '')}Buffer: {RESET}{CYAN}{BOLD}◂ {RESET}{CYAN}{BOLD}{buf_val}{RESET} {CYAN}{BOLD}▸{RESET} {DIM} chars from edge{RESET}")
                     row += 1
-
+                    
                 elif item["type"] == "save":
-                    try:
-                        if is_selected:
-                            stdscr.addstr(
-                                row, x, "\u25b8 ", curses.color_pair(1) | curses.A_BOLD
-                            )
-                        else:
-                            stdscr.addstr(row, x, "  ")
-                        stdscr.addstr(
-                            "Save & exit",
-                            curses.color_pair(1) | curses.A_BOLD
-                            if is_selected
-                            else curses.color_pair(1),
-                        )
-                    except curses.error:
-                        pass
+                    clr = GREEN if is_selected else DIM
+                    sys.stdout.write(f"{clr}{BOLD}Save & exit{RESET}")
                     row += 1
 
-            stdscr.refresh()
-            key = stdscr.getch()
-
-            if key == curses.KEY_UP or key == ord("k"):
-                if cursor_idx > 0:
-                    cursor_idx -= 1
-            elif key == curses.KEY_DOWN or key == ord("j"):
-                if cursor_idx < len(selectable) - 1:
-                    cursor_idx += 1
-            elif key == ord(" "):
+            sys.stdout.flush()
+            
+            # Wait for input
+            while True:
+                r, _, _ = select.select([sys.stdin], [], [])
+                if r:
+                    key = os.read(fd, 1).decode('utf-8', errors='ignore')
+                    if key == '\x1b':
+                        r2, _, _ = select.select([sys.stdin], [], [], 0.05)
+                        if r2:
+                            seq1 = os.read(fd, 1).decode('utf-8', errors='ignore')
+                            if seq1 == '[':
+                                r3, _, _ = select.select([sys.stdin], [], [], 0.05)
+                                if r3:
+                                    seq2 = os.read(fd, 1).decode('utf-8', errors='ignore')
+                                    if seq2 == 'A': key = 'k'  # UP
+                                    elif seq2 == 'B': key = 'j' # DOWN
+                                    elif seq2 == 'C': key = 'l' # RIGHT
+                                    elif seq2 == 'D': key = 'h' # LEFT
+                        else:
+                            key = 'q'
+                    break
+                    
+            if key in ('k', 'K'):
+                if cursor_idx > 0: cursor_idx -= 1
+            elif key in ('j', 'J'):
+                if cursor_idx < len(selectable) - 1: cursor_idx += 1
+            elif key == ' ':
                 item = menu[selectable[cursor_idx]]
                 if item["type"] == "component":
                     cid, ln = item["comp_id"], item["line"]
                     set_toggle(custom, cid, ln, not get_toggle(custom, cid, ln))
-                    preset_idx = len(preset_names) - 1  # → custom
+                    preset_idx = len(preset_names) - 1
                 elif item["type"] == "widget":
                     wi = WIDGETS.index(widget)
                     custom["widget"] = WIDGETS[(wi + 1) % len(WIDGETS)]
@@ -616,25 +503,25 @@ def interactive_curses(custom):
                         apply_preset(custom, preset_names[preset_idx])
                 elif item["type"] == "buffer":
                     custom["buffer"] = min(60, custom.get("buffer", 30) + 5)
-            elif key == curses.KEY_LEFT or key == curses.KEY_RIGHT:
+            elif key in ('h', 'l'):
                 item = menu[selectable[cursor_idx]]
-                direction = 1 if key == curses.KEY_RIGHT else -1
+                dir = 1 if key == 'l' else -1
                 if item["type"] == "widget":
                     wi = WIDGETS.index(widget)
-                    custom["widget"] = WIDGETS[(wi + direction) % len(WIDGETS)]
+                    custom["widget"] = WIDGETS[(wi + dir) % len(WIDGETS)]
                 elif item["type"] == "preset":
-                    preset_idx = (preset_idx + direction) % len(preset_names)
+                    preset_idx = (preset_idx + dir) % len(preset_names)
                     if preset_names[preset_idx] != "custom":
                         apply_preset(custom, preset_names[preset_idx])
                 elif item["type"] == "buffer":
                     buf = custom.get("buffer", 30)
-                    custom["buffer"] = max(0, min(60, buf + direction * 5))
-            elif key == ord("\n"):
+                    custom["buffer"] = max(0, min(60, buf + dir * 5))
+            elif key in ('\n', '\r'):
                 item = menu[selectable[cursor_idx]]
                 if item["type"] == "component":
                     cid, ln = item["comp_id"], item["line"]
                     set_toggle(custom, cid, ln, not get_toggle(custom, cid, ln))
-                    preset_idx = len(preset_names) - 1  # → custom
+                    preset_idx = len(preset_names) - 1
                 elif item["type"] == "widget":
                     wi = WIDGETS.index(widget)
                     custom["widget"] = WIDGETS[(wi + 1) % len(WIDGETS)]
@@ -646,21 +533,26 @@ def interactive_curses(custom):
                     custom["buffer"] = min(60, custom.get("buffer", 30) + 5)
                 elif item["type"] == "save":
                     return True
-            elif key == ord("s"):
+            elif key == 's':
                 return True
-            elif key == ord("q") or key == 27:
+            elif key in ('q', '\x03'):
                 return False
-            elif key == ord("1"):
+            elif key == '1':
                 preset_idx = 0
                 apply_preset(custom, preset_names[0])
-            elif key == ord("2"):
+            elif key == '2':
                 preset_idx = 1
                 apply_preset(custom, preset_names[1])
-            elif key == ord("3"):
+            elif key == '3':
                 preset_idx = 2
                 apply_preset(custom, preset_names[2])
 
-    return curses.wrapper(draw)
+    finally:
+        sys.stdout.write(SHOW_CURSOR)
+        sys.stdout.write(ALT_SCREEN_OFF)
+        sys.stdout.flush()
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
 
 
 # ── CLI ────────────────────────────────────────────────────────────
@@ -714,7 +606,7 @@ def cmd_custom(args):
 
     if not args:
         # Interactive mode
-        should_save = interactive_curses(custom)
+        should_save = interactive_configurator(custom)
         if should_save:
             cfg["custom"] = custom
             save_config(cfg)

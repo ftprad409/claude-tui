@@ -10,37 +10,7 @@ from pathlib import Path
 
 # ── ANSI helpers ──────────────────────────────────────────────────────
 
-_ANSI_RE = re.compile(r'\033\[[0-9;]*m')
-
-
-def _visible_len(s):
-    """Length of string after stripping ANSI escape codes."""
-    return len(_ANSI_RE.sub('', s))
-
-
-def _truncate_ansi(s, max_visible):
-    """Truncate an ANSI-colored string to max_visible characters."""
-    visible = 0
-    i = 0
-    while i < len(s) and visible < max_visible:
-        if s[i] == '\033' and i + 1 < len(s) and s[i + 1] == '[':
-            j = i + 2
-            while j < len(s) and s[j] != 'm':
-                j += 1
-            i = j + 1
-        else:
-            visible += 1
-            i += 1
-    return s[:i] + RESET if i < len(s) else s
-
-
-def _visual_rows(lines, term_width):
-    """Count actual terminal rows, accounting for line wrapping."""
-    rows = 0
-    for line in lines:
-        vlen = _visible_len(line)
-        rows += max(1, -(-vlen // term_width))  # ceil division, min 1
-    return rows
+from claude_tui_components.utils import visible_len as _visible_len, truncate as _truncate_ansi, visual_rows as _visual_rows
 
 
 # ── Settings ──────────────────────────────────────────────────────────
@@ -118,33 +88,11 @@ def get_context_limit(model_id):
 
 # ── ANSI codes ────────────────────────────────────────────────────────
 
-RESET = "\033[0m"
-BOLD = "\033[1m"
-DIM = "\033[2m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-ORANGE = "\033[38;5;208m"
-RED = "\033[31m"
-CYAN = "\033[96m"
-MAGENTA = "\033[95m"
-WHITE = "\033[97m"
-GRAY = "\033[90m"
-CLEAR = "\033[2J\033[H"
-HIDE_CURSOR = "\033[?25l"
-SHOW_CURSOR = "\033[?25h"
-ERASE_LINE = "\033[2K"
-ALT_SCREEN_ON = "\033[?1049h"
-ALT_SCREEN_OFF = "\033[?1049l"
-LOGO_GREEN = "\033[38;5;46m"
-
-# Matrix colors
-M_DARK = "\033[38;2;0;59;0m"
-M_MID = "\033[38;2;3;160;98m"
-M_BRIGHT = "\033[38;2;0;255;65m"
-
-# Activity pulse colors
-PULSE_NEW = "\033[38;2;0;255;65m"  # bright green flash
-PULSE_IDLE = "\033[38;2;80;80;80m"  # dim gray
+from claude_tui_components.colors import (
+    RESET, BOLD, DIM, GREEN, YELLOW, ORANGE, RED, CYAN, MAGENTA, WHITE, GRAY,
+    CLEAR, HIDE_CURSOR, SHOW_CURSOR, ERASE_LINE, ALT_SCREEN_ON, ALT_SCREEN_OFF,
+    LOGO_GREEN, M_DARK, M_MID, M_BRIGHT, PULSE_NEW, PULSE_IDLE
+)
 
 
 # ── Transcript discovery ──────────────────────────────────────────────
