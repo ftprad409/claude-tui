@@ -14,6 +14,7 @@ from claude_tui_core.models import (
     DEFAULT_CONTEXT_LIMIT,
     get_context_limit
 )
+from claude_tui_components.utils import format_tokens
 
 
 def find_transcript(cwd: Optional[str] = None) -> Optional[str]:
@@ -518,14 +519,6 @@ def format_duration(start_ts: Optional[str], end_ts: Optional[str] = None) -> st
     except (ValueError, OSError):
         return "unknown"
 
-
-def format_tokens(n: int) -> str:
-    """Format token count as human-readable."""
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.1f}k"
-    return str(n)
 
 
 def get_transcript_path() -> Optional[str]:

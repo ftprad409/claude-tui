@@ -21,6 +21,8 @@ from .constants import (
 from .debug import debug_log
 from .settings import is_visible
 
+from claude_tui_components.utils import format_tokens
+
 
 class InputData(TypedDict):
     model: str
@@ -257,13 +259,6 @@ def parse_transcript(transcript_path, context_limit=None):
     result["subagent_count"] = len(active_subagents)
     return result
 
-
-def format_tokens(n):
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.1f}k"
-    return str(n)
 
 
 def format_cost(cost):

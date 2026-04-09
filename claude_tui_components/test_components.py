@@ -35,7 +35,7 @@ class TestUtils(unittest.TestCase):
 
 
 class TestSettings(unittest.TestCase):
-    @patch("claude_tui_components.settings.load_settings")
+    @patch("claude_tui_core.settings.load_settings")
     def test_get_setting(self, mock_load):
         mock_load.return_value = {
             "sparkline": {"mode": "tail"},

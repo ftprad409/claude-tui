@@ -34,6 +34,7 @@ from pathlib import Path
 
 # Pricing per million tokens
 from claude_tui_core.models import MODEL_PRICING
+from claude_tui_components.utils import format_tokens
 
 # ANSI
 RESET = "\033[0m"
@@ -313,14 +314,6 @@ def format_duration(minutes):
     mins = minutes % 60
     return f"{hours}h {mins:02d}m"
 
-
-def format_tokens(n):
-    """Format token count."""
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.1f}k"
-    return str(n)
 
 
 def format_timestamp(ts):

@@ -24,7 +24,7 @@ from claude_tui_core.settings import (
 
 # ── ANSI helpers ──────────────────────────────────────────────────────
 
-from claude_tui_components.utils import visible_len as _visible_len, truncate as _truncate_ansi, visual_rows as _visual_rows
+from claude_tui_components.utils import visible_len as _visible_len, truncate as _truncate_ansi, visual_rows as _visual_rows, format_tokens
 
 
 # Pricing and settings now imported from claude_tui_core
@@ -465,13 +465,6 @@ def format_event_time(ts_str):
     except Exception:
         return "??:??:??"
 
-
-def format_tokens(n):
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.1f}k"
-    return str(n)
 
 
 def get_terminal_width():
