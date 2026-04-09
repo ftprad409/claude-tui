@@ -136,5 +136,21 @@ class TestNetwork(unittest.TestCase):
         self.assertIsNone(res)
         mock_fd.close.assert_called_once()
 
+    @patch("claude_tui_core.network._try_acquire_lock", return_value=1)
+    @patch("claude_tui_core.network._release_lock")
+    @patch("claude_tui_core.network._load_oauth_token", return_value="tok")
+    @patch("claude_tui_core.network._fetch_https_json", return_value=(429, {}))
+    @patch("claude_tui_core.network._write_json_file")
+    @patch("claude_tui_core.network._read_json_file")
+    def test_429_persists_retry_after(self, mock_read, mock_write, _mfetch, _mtoken, _mrel, _mlock):
+        """429 response must write updated retry_after to disk so other processes honour it."""
+        mock_read.return_value = {"fetched_at": 0, "retry_count": 0, "retry_after": 0}
+        from claude_tui_core.network import fetch_usage
+        fetch_usage(background=False)
+        mock_write.assert_called_once()
+        written = mock_write.call_args[0][1]
+        self.assertGreater(written["retry_after"], time.time())
+        self.assertEqual(written["retry_count"], 1)
+
 if __name__ == "__main__":
     unittest.main()

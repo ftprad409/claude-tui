@@ -334,6 +334,12 @@ def fetch_usage(background=False):
             backoff = min(120 * (2**current_retry), 600)
             cache["retry_count"] = current_retry + 1
             cache["retry_after"] = time.time() + backoff
+            # Must persist backoff state so other concurrent agent processes
+            # honour the same cooldown window (not just the current process).
+            try:
+                _write_json_file(USAGE_CACHE_PATH, cache)
+            except OSError:
+                pass
             return cache
     finally:
         _release_lock(lock_fd)

@@ -111,7 +111,7 @@ def main():
 
     usage = None
     if is_visible("line2", "usage") or is_visible("line3", "usage_weekly") or compact_mode:
-        usage = fetch_usage()
+        usage = fetch_usage(background=True)
 
     line1_parts = build_line1_parts(
         bar,
@@ -138,7 +138,7 @@ def main():
         usage_bar_length=bar_length,
     )
     if is_visible("line2", "api_status"):
-        api_status_str = format_api_status(fetch_api_status())
+        api_status_str = format_api_status(fetch_api_status(background=True))
         if api_status_str:
             line2_parts.append(api_status_str)
     line3_lines = build_line3_parts(usage, metrics, usage_bar_length=bar_length)
