@@ -71,7 +71,7 @@ def main():
 
     usage = None
     if is_visible("line2", "usage") or is_visible("line3", "usage_weekly") or compact_mode:
-        usage = fetch_usage(background=True)
+        usage = fetch_usage(background=False)
 
     ds = DisplayState(
         model=basic["model"],
@@ -106,7 +106,7 @@ def main():
     line1_parts = build_line1_parts(ds)
     line2_parts = build_line2_parts(ds)
     if is_visible("line2", "api_status"):
-        api_status_str = format_api_status(fetch_api_status(background=True))
+        api_status_str = format_api_status(fetch_api_status(background=False))
         if api_status_str:
             line2_parts.append(api_status_str)
     line3_lines = build_line3_parts(ds)
