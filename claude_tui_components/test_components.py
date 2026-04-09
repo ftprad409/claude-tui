@@ -7,6 +7,8 @@ from claude_tui_components.utils import visible_len, truncate, visual_rows
 from claude_tui_components.colors import BOLD, RED, RESET
 from claude_tui_components.settings import get_setting
 from claude_tui_components.widgets import build_progress_bar, build_sparkline
+from claude_tui_components.lines import build_bar_line, build_context_line, format_token_suffix
+from claude_tui_components.utils import format_tokens
 
 class TestUtils(unittest.TestCase):
     def test_visible_len(self):
@@ -72,6 +74,59 @@ class TestWidgets(unittest.TestCase):
         values = [1, 2, 3, 4, 10, None, 5]
         spark = build_sparkline(values, width=10, mode="merge", merge_size=2)
         self.assertEqual(visible_len(spark), 4) # 7 elements / 2 merge size = 4 buckets
+
+class TestFormatTokens(unittest.TestCase):
+    def test_millions(self):
+        self.assertEqual(format_tokens(1_500_000), "1.5M")
+
+    def test_thousands(self):
+        self.assertEqual(format_tokens(68_500), "68.5k")
+
+    def test_small(self):
+        self.assertEqual(format_tokens(500), "500")
+
+    def test_zero(self):
+        self.assertEqual(format_tokens(0), "0")
+
+
+class TestLines(unittest.TestCase):
+    def test_build_bar_line_basic(self):
+        line = build_bar_line(0.5, 10, pct_label="X")
+        self.assertIn("50%", line)
+        self.assertIn("X", line)
+
+    def test_build_bar_line_with_icon_and_suffix(self):
+        line = build_bar_line(0.3, 10, icon="⚡", suffix="hello")
+        self.assertIn("⚡", line)
+        self.assertIn("hello", line)
+
+    def test_build_bar_line_no_icon_no_suffix(self):
+        line = build_bar_line(0.5, 10)
+        self.assertNotIn("⚡", line)
+
+    def test_build_bar_line_with_threshold(self):
+        line = build_bar_line(0.5, 20, threshold=0.8)
+        self.assertIn("%", line)
+
+    def test_format_token_suffix_with_numbers(self):
+        result = format_token_suffix(68500, 1_000_000)
+        self.assertIn("68.5k", result)
+        self.assertIn("1.0M", result)
+        self.assertIn("⚡", result)
+
+    def test_format_token_suffix_with_strings(self):
+        result = format_token_suffix("120k", "1.0M")
+        self.assertIn("120k", result)
+        self.assertIn("1.0M", result)
+        self.assertIn("⚡", result)
+
+    def test_build_context_line(self):
+        line = build_context_line(0.5, 20, threshold=0.83, ctx_used=100000, ctx_limit=200000)
+        self.assertIn("C", line)
+        self.assertIn("⚡", line)
+        self.assertIn("100.0k", line)
+        self.assertIn("200.0k", line)
+
 
 if __name__ == "__main__":
     unittest.main()

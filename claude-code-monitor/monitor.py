@@ -46,6 +46,7 @@ from chart import (
     show_efficiency_chart, run_standalone as _run_chart_standalone,
 )
 from claude_tui_components.widgets import build_progress_bar, build_sparkline
+from claude_tui_components.lines import build_context_line
 
 _original_termios = None
 
@@ -54,15 +55,19 @@ _original_termios = None
 
 from claude_tui_core.network import (
     fetch_api_status as _core_fetch_api_status,
-    format_api_status as _format_api_status
+    format_api_status as _format_api_status,
+    fetch_usage as _core_fetch_usage,
+    format_usage_session as _format_usage_session,
+    format_usage_weekly as _format_usage_weekly,
 )
 
 def _fetch_api_status():
     """Delegate to core with background refresh enabled."""
     return _core_fetch_api_status(background=True)
 
-
-# _format_api_status is now imported from core
+def _fetch_usage():
+    """Delegate to core with background refresh enabled."""
+    return _core_fetch_usage(background=True)
 
 
 # ── Dashboard rendering ─────────────────────────────────────────────
@@ -127,7 +132,7 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     duration = format_duration_live(r["start_time"])
     w = min(term_width - 2, 120)  # content width, cap at 120
     bar_width = max(20, min(w - 30, 50))
-    bar = build_progress_bar(ratio, bar_width, compact_ratio=compact_ratio)
+    ctx_line = build_context_line(ratio, bar_width, threshold=compact_ratio, ctx_used=ctx_used, ctx_limit=ctx_limit)
     spark_width = max(20, min(w - 10, 80))
     sparkline = build_sparkline(r["context_history"], spark_width)
 
@@ -222,8 +227,17 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
     lines.append("")
 
     # Context section
+    usage = _fetch_usage()
+    session_str = _format_usage_session(usage, length=bar_width)
+    weekly_str = _format_usage_weekly(usage, length=bar_width)
+
     lines.append(f"  {BOLD}CONTEXT{RESET}")
-    lines.append(f"  {bar}  {CYAN}{format_tokens(int(ctx_used))}{RESET}{DIM}/{RESET}{GRAY}{format_tokens(ctx_limit)}{RESET}")
+    lines.append(f"  {ctx_line}")
+    if session_str:
+        lines.append(f"  {session_str}")
+    if weekly_str:
+        lines.append(f"  {weekly_str}")
+    lines.append("")
     lines.append(f"  {sparkline}")
     compact_line = f"  {DIM}Compactions:{RESET} {CYAN}{r['compact_count']}{RESET}  {DIM}│{RESET}  {DIM}Turns left:{RESET} {turns_left}  {DIM}│{RESET}  {DIM}Since compact:{RESET} {CYAN}{r['turns_since_compact']}{RESET}"
 
@@ -245,6 +259,7 @@ def _render_header_body(r, idle_secs, just_updated, term_width):
         wasted_str = format_tokens(int(wasted)) if wasted > 0 else "0"
         total_str = format_tokens(int(total_built))
         lines.append(f"  {DIM}Efficiency:{RESET} {eff_color}{eff_pct}%{RESET}  {DIM}│{RESET}  {DIM}Wasted:{RESET} {RED}{wasted_str}{RESET}{DIM}/{RESET}{GRAY}{total_str}{RESET}")
+
     lines.append("")
 
     # Activity section

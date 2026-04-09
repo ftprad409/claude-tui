@@ -12,6 +12,7 @@ from .settings import is_visible
 
 from claude_tui_components.utils import visible_len, truncate, get_terminal_cols, visual_rows
 from claude_tui_components.widgets import build_progress_bar, build_sparkline
+from claude_tui_components.lines import build_bar_line, format_token_suffix
 
 
 def format_git_branch(branch, diff_stat):
@@ -96,17 +97,18 @@ def calculate_terminal_width(buffer=30, widget_offset=10):
 def build_line1_parts(bar, tokens_str, limit_str, compact_prediction, model, sparkline_part, cost_str, duration_str, metrics, efficiency_part, session_id):
     parts = []
     dim = GRAY
+    token_suffix = format_token_suffix(tokens_str, limit_str)
     if is_visible("line1", "context_bar"):
         ctx = f"{bar}"
         if is_visible("line1", "token_count"):
-            ctx += f" {YELLOW}⚡{RESET}{CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
+            ctx += f" {token_suffix}"
         if compact_prediction and is_visible("line1", "compact_prediction"):
-            ctx += f" {dim}⋮{RESET} {compact_prediction}"
+            ctx += f" {GRAY}⋮{RESET} {compact_prediction}"
         parts.append(ctx)
     elif is_visible("line1", "token_count"):
-        ctx = f"{YELLOW}⚡{RESET}{CYAN}{tokens_str}{RESET}{dim}/{RESET}{GRAY}{limit_str}{RESET}"
+        ctx = token_suffix
         if compact_prediction and is_visible("line1", "compact_prediction"):
-            ctx += f" {dim}⋮{RESET} {compact_prediction}"
+            ctx += f" {GRAY}⋮{RESET} {compact_prediction}"
         parts.append(ctx)
     elif compact_prediction and is_visible("line1", "compact_prediction"):
         parts.append(compact_prediction)
@@ -204,9 +206,10 @@ def build_compact_line(model, bar, tokens_str, limit_str, usage, usage_bar_lengt
     if is_visible("line1", "model"):
         parts.append(f"{BOLD}{MAGENTA}{model}{RESET}")
     if is_visible("line1", "context_bar"):
-        parts.append(f"{bar}")
+        ctx = f"{bar}"
         if is_visible("line1", "token_count"):
-            parts.append(f"{CYAN}{tokens_str}{RESET}{GRAY}/{RESET}{GRAY}{limit_str}{RESET}")
+            ctx += f" {format_token_suffix(tokens_str, limit_str)}"
+        parts.append(ctx)
     if usage:
         session = format_usage_session(usage, length=usage_bar_length)
         weekly = format_usage_weekly(usage, length=usage_bar_length)

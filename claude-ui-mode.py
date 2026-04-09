@@ -179,7 +179,7 @@ def set_mode(mode):
 # ── Config (custom components) ─────────────────────────────────────
 
 COMPONENTS = [
-    ("context_bar", "line1", "Context bar", lambda: build_progress_bar(0.42, 20, 0.83, "C") + f" {CYAN}112k{RESET}{DIM}/{RESET}{GRAY}1.0M{RESET}", 1),
+    ("context_bar", "line1", "Context bar", lambda: build_progress_bar(0.42, 20, threshold=0.83, pct_label="C") + f" {CYAN}112k{RESET}{DIM}/{RESET}{GRAY}1.0M{RESET}", 1),
     ("model", "line1", "Model", lambda: f"{BOLD}{MAGENTA}Opus 4.6{RESET}", 5),
     ("token_count", "line1", "Token count", lambda: f"{YELLOW}⚡{RESET}{CYAN}65.5k{RESET}{DIM}/{RESET}{GRAY}200.0k{RESET}", 3),
     ("compact_prediction", "line1", "Compact predict", lambda: f"{DIM}ETA 24k{RESET}", 3),

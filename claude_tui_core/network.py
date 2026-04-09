@@ -174,8 +174,6 @@ def fetch_api_status(background=False):
     finally:
         _release_lock(lock_fd)
 
-    return cache
-
 
 def format_api_status(status_data):
     """Format status data into a colored display string."""
@@ -308,6 +306,7 @@ def fetch_usage(background=False):
                 "Accept": APPLICATION_JSON,
                 "Authorization": f"Bearer {token}",
                 "anthropic-beta": "oauth-2025-04-20",
+                "User-Agent": "claude-code/2.1.80",
             },
             timeout=3,
         )
@@ -361,42 +360,30 @@ def _format_reset_countdown(reset_iso: str) -> str:
         return ""
 
     h, m = int(diff // 3600), int((diff % 3600) // 60)
-    return f" ⏱ {h}h{m:02d}m" if h > 0 else f" ⏱ {m}m"
+    return f"{h}h{m:02d}m" if h > 0 else f"{m}m"
+
+
+def _format_usage_bar(usage_data, key, pct_label, length=20):
+    """Format a usage window as a progress bar line."""
+    from claude_tui_components.lines import build_bar_line
+
+    if not usage_data:
+        return ""
+    window = usage_data.get(key, {})
+    pct = window.get("utilization", 0)
+    if pct is None:
+        return ""
+
+    ratio = min(pct / 100.0, 1.0)
+    countdown = _format_reset_countdown(window.get("resets_at", ""))
+    return build_bar_line(ratio, length, pct_label=pct_label, icon="⏱" if countdown else "", suffix=countdown)
 
 
 def format_usage_session(usage_data, length=20):
-    """Format session usage for display."""
-    from claude_tui_components.widgets import build_progress_bar
-
-    if not usage_data:
-        return ""
-    five_hour = usage_data.get("five_hour", {})
-    pct = five_hour.get("utilization", 0)
-    if pct is None:
-        return ""
-
-    ratio = min(pct / 100.0, 1.0)
-    bar = build_progress_bar(ratio, length=length, pct_label="S")
-
-    reset_str = _format_reset_countdown(five_hour.get("resets_at", ""))
-
-    return f"{bar}{reset_str.ljust(8)}"
+    """Format session (5-hour) usage for display."""
+    return _format_usage_bar(usage_data, "five_hour", "S", length)
 
 
 def format_usage_weekly(usage_data, length=20):
-    """Format weekly usage for display."""
-    from claude_tui_components.widgets import build_progress_bar
-
-    if not usage_data:
-        return ""
-    seven_day = usage_data.get("seven_day", {})
-    pct = seven_day.get("utilization", 0)
-    if pct is None:
-        return ""
-
-    ratio = min(pct / 100.0, 1.0)
-    bar = build_progress_bar(ratio, length=length, pct_label="W")
-
-    reset_str = _format_reset_countdown(seven_day.get("resets_at", ""))
-
-    return f"{bar}{reset_str.ljust(8)}"
+    """Format weekly (7-day) usage for display."""
+    return _format_usage_bar(usage_data, "seven_day", "W", length)

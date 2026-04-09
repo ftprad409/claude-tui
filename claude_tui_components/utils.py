@@ -34,6 +34,15 @@ def visual_rows(lines, term_width):
         rows += max(1, -(-vlen // term_width))  # ceil division, min 1
     return rows
 
+def format_tokens(n):
+    """Format token count as compact string (e.g. 150k, 1.2M)."""
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}k"
+    return str(n)
+
+
 def get_terminal_cols():
     """Get terminal width, fallback to 80."""
     import fcntl, struct, termios

@@ -79,7 +79,7 @@ def main():
         spark_width = 20
 
     bar = build_progress_bar(
-        ratio, length=bar_length, compact_ratio=ctx_metrics["compact_ratio"], pct_label="C"
+        ratio, length=bar_length, threshold=ctx_metrics["compact_ratio"], pct_label="C"
     )
     tokens_str = format_tokens(int(ctx_used))
     limit_str = format_tokens(context_limit)

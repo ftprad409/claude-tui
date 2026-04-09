@@ -65,7 +65,7 @@ def build_sparkline(values, width=20, mode="tail", merge_size=2):
         chars.append(f"{color}{blocks[idx]}{RESET}")
     return "".join(chars)
 
-def build_progress_bar(ratio, length=20, compact_ratio=None, pct_label=""):
+def build_progress_bar(ratio, length=20, threshold=None, pct_label=""):
     ratio = max(0.0, min(ratio, 1.0))
     precise_fill = ratio * length
     full_cells = int(precise_fill)
@@ -100,15 +100,15 @@ def build_progress_bar(ratio, length=20, compact_ratio=None, pct_label=""):
         head_idx = min(full_cells, length - 1)
         bar_parts[head_idx] = f"{head_color}▌{RESET}"
 
-    # Compact ceiling tick marker (when available) to show compaction threshold.
-    if compact_ratio and 0 < compact_ratio < 1:
-        tick_idx = min(max(int(compact_ratio * length), 0), length - 1)
+    # Tick marker at threshold position (when available).
+    if threshold and 0 < threshold < 1:
+        tick_idx = min(max(int(threshold * length), 0), length - 1)
         if tick_idx >= full_cells:
             bar_parts[tick_idx] = f"\033[38;2;140;145;170m┆{RESET}"
 
     bar = "".join(bar_parts)
     bar = f"\033[38;2;90;95;120m▏{RESET}{bar}\033[38;2;90;95;120m▕{RESET}"
-    fill_of_ceiling = ratio / compact_ratio if compact_ratio and compact_ratio > 0 else ratio
+    fill_of_ceiling = ratio / threshold if threshold and threshold > 0 else ratio
     if fill_of_ceiling < 0.60:
         pct_color = GREEN
     elif fill_of_ceiling < 0.85:
