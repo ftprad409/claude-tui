@@ -4,9 +4,12 @@ Handles status.claude.com and Anthropic OAuth usage API with caching and locking
 """
 
 import fcntl
+import http.client
 import json
 import os
+import ssl
 import subprocess
+import threading
 import time
 from datetime import datetime, timezone
 from typing import IO
@@ -44,14 +47,29 @@ def _read_json_file(path: str) -> dict | None:
         return None
 
 
+def _write_json_file(path: str, payload: dict) -> None:
+    """Atomically write JSON payload to a file path."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(payload, f)
+    os.replace(tmp, path)
+
+
 def _try_acquire_lock(lock_file: str) -> IO | None:
     """Acquire an exclusive non-blocking lock. Returns file descriptor or None."""
+    lock_fd = None
     try:
         os.makedirs(os.path.dirname(lock_file), exist_ok=True)
         lock_fd = open(lock_file, "w")
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return lock_fd
     except (IOError, OSError):
+        if lock_fd:
+            try:
+                lock_fd.close()
+            except (IOError, OSError):
+                pass
         return None
 
 
@@ -64,6 +82,35 @@ def _release_lock(lock_fd: IO | None) -> None:
         lock_fd.close()
     except (IOError, OSError):
         pass
+
+
+def _fetch_https_json(
+    host: str, path: str, headers: dict[str, str], timeout: int
+) -> tuple[int | None, dict | None]:
+    """Issue a GET request and decode JSON on HTTP 200 responses."""
+    conn = None
+    try:
+        conn = http.client.HTTPSConnection(
+            host, timeout=timeout, context=ssl.create_default_context()
+        )
+        conn.request("GET", path, headers=headers)
+        resp = conn.getresponse()
+        status = resp.status
+        body = resp.read()
+        if status != 200:
+            return status, None
+        return status, json.loads(body)
+    except (
+        OSError,
+        TimeoutError,
+        http.client.HTTPException,
+        ssl.SSLError,
+        json.JSONDecodeError,
+    ):
+        return None, None
+    finally:
+        if conn:
+            conn.close()
 
 
 def fetch_api_status(background=False):
@@ -97,43 +144,33 @@ def fetch_api_status(background=False):
         if refreshed and time.time() - refreshed.get("fetched_at", 0) < ttl:
             return refreshed
 
-        import http.client
-        import ssl
+        status, data = _fetch_https_json(
+            "status.claude.com",
+            "/api/v2/summary.json",
+            {"Accept": APPLICATION_JSON},
+            timeout=2,
+        )
+        if status != 200 or not data:
+            return cache
 
-        ctx = ssl.create_default_context()
-        conn = http.client.HTTPSConnection("status.claude.com", timeout=2, context=ctx)
-        try:
-            conn.request(
-                "GET", "/api/v2/summary.json", headers={"Accept": APPLICATION_JSON}
-            )
-            resp = conn.getresponse()
-            if resp.status == 200:
-                data = json.loads(resp.read())
-                cache = {
-                    "fetched_at": time.time(),
-                    "status": data.get("status", {}).get("indicator", "none"),
-                    "components": {
-                        c["name"]: c["status"] for c in data.get("components", [])
-                    },
-                    "incidents": [
-                        {
-                            "name": i["name"],
-                            "status": i["status"],
-                            "impact": i["impact"],
-                        }
-                        for i in data.get("incidents", [])
-                    ],
+        fresh = {
+            "fetched_at": time.time(),
+            "status": data.get("status", {}).get("indicator", "none"),
+            "components": {c["name"]: c["status"] for c in data.get("components", [])},
+            "incidents": [
+                {
+                    "name": i["name"],
+                    "status": i["status"],
+                    "impact": i["impact"],
                 }
-                os.makedirs(os.path.dirname(STATUS_CACHE_PATH), exist_ok=True)
-                tmp = STATUS_CACHE_PATH + ".tmp"
-                with open(tmp, "w") as f:
-                    json.dump(cache, f)
-                os.replace(tmp, STATUS_CACHE_PATH)
-                return cache
-        finally:
-            conn.close()
-    except Exception:
-        pass
+                for i in data.get("incidents", [])
+            ],
+        }
+        try:
+            _write_json_file(STATUS_CACHE_PATH, fresh)
+        except OSError:
+            pass
+        return fresh
     finally:
         _release_lock(lock_fd)
 
@@ -225,7 +262,7 @@ def _load_oauth_token():
             )
             if token:
                 return token
-    except Exception:
+    except (subprocess.SubprocessError, OSError, json.JSONDecodeError, ValueError):
         pass
 
     return None
@@ -264,56 +301,61 @@ def fetch_usage(background=False):
         if not token:
             return cache
 
-        import http.client
-        import ssl
+        status, data = _fetch_https_json(
+            "api.anthropic.com",
+            "/api/oauth/usage",
+            {
+                "Accept": APPLICATION_JSON,
+                "Authorization": f"Bearer {token}",
+                "anthropic-beta": "oauth-2025-04-20",
+            },
+            timeout=3,
+        )
+        if status == 200 and data:
+            fresh = {
+                "fetched_at": time.time(),
+                "five_hour": data.get("five_hour", {}),
+                "seven_day": data.get("seven_day", {}),
+                "seven_day_sonnet": data.get("seven_day_sonnet", {}),
+                "extra_usage": data.get("extra_usage", {}),
+                "retry_count": 0,
+                "retry_after": 0,
+            }
+            try:
+                _write_json_file(USAGE_CACHE_PATH, fresh)
+            except OSError:
+                pass
+            return fresh
 
-        ctx = ssl.create_default_context()
-        conn = http.client.HTTPSConnection("api.anthropic.com", timeout=3, context=ctx)
-        try:
-            conn.request(
-                "GET",
-                "/api/oauth/usage",
-                headers={
-                    "Accept": APPLICATION_JSON,
-                    "Authorization": f"Bearer {token}",
-                    "anthropic-beta": "oauth-2025-04-20",
-                },
-            )
-            resp = conn.getresponse()
-            if resp.status == 200:
-                data = json.loads(resp.read())
-                fresh = {
-                    "fetched_at": time.time(),
-                    "five_hour": data.get("five_hour", {}),
-                    "seven_day": data.get("seven_day", {}),
-                    "seven_day_sonnet": data.get("seven_day_sonnet", {}),
-                    "extra_usage": data.get("extra_usage", {}),
-                    "retry_count": 0,
-                    "retry_after": 0,
-                }
-                os.makedirs(os.path.dirname(USAGE_CACHE_PATH), exist_ok=True)
-                tmp = USAGE_CACHE_PATH + ".tmp"
-                with open(tmp, "w") as f:
-                    json.dump(fresh, f)
-                os.replace(tmp, USAGE_CACHE_PATH)
-                return fresh
-
-            if resp.status == 429:
-                if not cache:
-                    return None
-                current_retry = cache.get("retry_count", 0)
-                backoff = min(120 * (2**current_retry), 600)
-                cache["retry_count"] = current_retry + 1
-                cache["retry_after"] = time.time() + backoff
-                return cache
-        finally:
-            conn.close()
-    except Exception:
-        pass
+        if status == 429:
+            if not cache:
+                return None
+            current_retry = cache.get("retry_count", 0)
+            backoff = min(120 * (2**current_retry), 600)
+            cache["retry_count"] = current_retry + 1
+            cache["retry_after"] = time.time() + backoff
+            return cache
     finally:
         _release_lock(lock_fd)
 
     return cache
+
+
+def _format_reset_countdown(reset_iso: str) -> str:
+    """Format ISO reset timestamp into a compact countdown label."""
+    if not isinstance(reset_iso, str) or not reset_iso:
+        return ""
+    try:
+        reset_dt = datetime.fromisoformat(reset_iso.replace("Z", UTC_OFFSET))
+    except ValueError:
+        return ""
+
+    diff = (reset_dt - datetime.now(timezone.utc)).total_seconds()
+    if diff <= 0:
+        return ""
+
+    h, m = int(diff // 3600), int((diff % 3600) // 60)
+    return f" ⏱ {h}h{m:02d}m" if h > 0 else f" ⏱ {m}m"
 
 
 def format_usage_session(usage_data, length=20):
@@ -330,17 +372,7 @@ def format_usage_session(usage_data, length=20):
     ratio = min(pct / 100.0, 1.0)
     bar = build_progress_bar(ratio, length=length, pct_label="S")
 
-    reset_iso = five_hour.get("resets_at", "")
-    reset_str = ""
-    if reset_iso:
-        try:
-            reset_dt = datetime.fromisoformat(reset_iso.replace("Z", UTC_OFFSET))
-            diff = (reset_dt - datetime.now(timezone.utc)).total_seconds()
-            if diff > 0:
-                h, m = int(diff // 3600), int((diff % 3600) // 60)
-                reset_str = f" ⏱ {h}h{m:02d}m" if h > 0 else f" ⏱ {m}m"
-        except:
-            pass
+    reset_str = _format_reset_countdown(five_hour.get("resets_at", ""))
 
     return f"{bar}{reset_str.ljust(8)}"
 
@@ -359,16 +391,6 @@ def format_usage_weekly(usage_data, length=20):
     ratio = min(pct / 100.0, 1.0)
     bar = build_progress_bar(ratio, length=length, pct_label="W")
 
-    reset_iso = seven_day.get("resets_at", "")
-    reset_str = ""
-    if reset_iso:
-        try:
-            reset_dt = datetime.fromisoformat(reset_iso.replace("Z", UTC_OFFSET))
-            diff = (reset_dt - datetime.now(timezone.utc)).total_seconds()
-            if diff > 0:
-                h, m = int(diff // 3600), int((diff % 3600) // 60)
-                reset_str = f" ⏱ {h}h{m:02d}m" if h > 0 else f" ⏱ {m}m"
-        except:
-            pass
+    reset_str = _format_reset_countdown(seven_day.get("resets_at", ""))
 
     return f"{bar}{reset_str.ljust(8)}"

@@ -147,7 +147,7 @@ A centralized UI library containing all shared visual elements (progress bars, s
 
 ### [claude_tui_core](./claude_tui_core/)
 
-The centralized domain logic layer following SOLID/SRP principles. It manages the single source of truth for Anthropic model data (pricing, context windows), handles all external HTTP communication (status page polling, OAuth usage tracking), and provides a unified configuration loader with high-performance hot-reloading.
+The centralized domain logic layer following SOLID/SRP principles. It manages the single source of truth for Anthropic model data (pricing, context windows), handles all external HTTP communication (status page polling, OAuth usage tracking), and provides a unified configuration loader with high-performance hot-reloading. The network layer uses lock-aware caching with explicit typed exception handling, and model pricing includes deterministic fuzzy aliases for shorthand keys like `opus`, `sonnet3`, and `haiku4`.
 
 ### [claude-code-statusline](./claude-code-statusline/)
 

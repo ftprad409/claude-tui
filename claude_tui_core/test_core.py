@@ -17,6 +17,7 @@ from claude_tui_core.models import (
 )
 from claude_tui_core.settings import get_setting, load_settings, reset_settings_cache
 from claude_tui_core.network import (
+    _try_acquire_lock,
     format_api_status, 
     format_usage_session, 
     fetch_api_status
@@ -40,14 +41,25 @@ class TestModels(unittest.TestCase):
     def test_fuzzy_pricing(self):
         # Sonnet 4 abbreviated
         p = get_model_pricing_fuzzy("claude-sonnet-4")
-        self.assertEqual(p["input"], 3.0)
-        
+        self.assertIs(p, MODEL_PRICING["claude-sonnet-4-6"])
+
         # Sonnet 3.5 abbreviated
         p2 = get_model_pricing_fuzzy("claude-sonnet-3")
-        self.assertEqual(p2["input"], 3.0)
-        
+        self.assertIs(p2, MODEL_PRICING["claude-sonnet-3-5"])
+
+        # Family shortcuts should map to the right tier
+        self.assertIs(get_model_pricing_fuzzy("opus"), MODEL_PRICING["claude-opus-4-6"])
+        self.assertIs(get_model_pricing_fuzzy("haiku"), MODEL_PRICING["claude-haiku-4-5"])
+
+        # Version-family aliases should resolve deterministically
+        self.assertIs(get_model_pricing_fuzzy("sonnet4"), MODEL_PRICING["claude-sonnet-4-6"])
+        self.assertIs(get_model_pricing_fuzzy("sonnet3"), MODEL_PRICING["claude-sonnet-3-5"])
+        self.assertIs(get_model_pricing_fuzzy("haiku4"), MODEL_PRICING["claude-haiku-4-5"])
+        self.assertIs(get_model_pricing_fuzzy("haiku3"), MODEL_PRICING["claude-haiku-3-5"])
+
         # Empty/Unknown defaults to Sonnet 4.6
         self.assertEqual(get_model_pricing_fuzzy(""), MODEL_PRICING["claude-sonnet-4-6"])
+        self.assertEqual(get_model_pricing_fuzzy("-"), MODEL_PRICING["claude-sonnet-4-6"])
         self.assertEqual(get_model_pricing_fuzzy("unknown"), MODEL_PRICING["claude-sonnet-4-6"])
 
 class TestSettings(unittest.TestCase):
@@ -105,14 +117,24 @@ class TestNetwork(unittest.TestCase):
     def test_background_refresh_trigger(self, mock_thread, mock_read):
         # Mock stale cache
         mock_read.return_value = {"fetched_at": 0, "status": "none"}
-        
+
         # Call with background=True
         res = fetch_api_status(background=True)
-        
+
         # Should return stale cache
         self.assertEqual(res["status"], "none")
         # Should have started a thread
         mock_thread.assert_called_once()
+
+    @patch("claude_tui_core.network.fcntl.flock", side_effect=OSError("locked"))
+    @patch("claude_tui_core.network.open")
+    def test_lock_fd_closed_on_lock_failure(self, mock_open, _mock_flock):
+        mock_fd = MagicMock()
+        mock_open.return_value = mock_fd
+
+        res = _try_acquire_lock("/tmp/claudetui-test.lock")
+        self.assertIsNone(res)
+        mock_fd.close.assert_called_once()
 
 if __name__ == "__main__":
     unittest.main()
