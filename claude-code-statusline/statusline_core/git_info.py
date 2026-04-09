@@ -1,4 +1,4 @@
-"""Git helpers for statusline."""
+"""Git helpers for statusline — branch detection, diff stats, formatting."""
 
 import subprocess
 
@@ -27,6 +27,14 @@ def get_git_branch():
     except Exception:
         debug_log("get_git_branch failed")
         return ""
+
+
+def format_git_branch(branch, diff_stat):
+    """Format branch name with optional diff stats for display."""
+    if not branch:
+        return ""
+    part = f"{GREEN}⎇ {branch}{RESET}"
+    return f"{part} {diff_stat}" if diff_stat else part
 
 
 def get_git_diff_stat():

@@ -11,7 +11,7 @@ from contextlib import redirect_stdout
 from unittest import mock
 
 import statusline
-from statusline_core import api_clients, git_info, render, transcript
+from statusline_core import api_clients, calculations, git_info, render, transcript
 from statusline_core.constants import DEFAULT_CONTEXT_LIMIT
 
 
@@ -99,25 +99,26 @@ class TestTranscriptParsing(unittest.TestCase):
             "total_context_built": 10000,
             "tokens_wasted": 1000,
         }
-        pred = transcript.calculate_compaction_prediction(
+        pred = calculations.calculate_compaction_prediction(
             1700, 200_000, 3, metrics, ratio=0.2
         )
         self.assertIn("ETA", pred)
-        with mock.patch("statusline_core.transcript.is_visible", return_value=True):
-            eff = transcript.calculate_efficiency(metrics, 2000)
+        with mock.patch("statusline_core.calculations.is_visible", return_value=True):
+            eff = calculations.calculate_efficiency(metrics, 2000)
         self.assertIn("eff", eff)
 
 
 class TestFormattingAndRender(unittest.TestCase):
     def test_token_cost_duration_format(self):
-        self.assertEqual(transcript.format_tokens(1200), "1.2k")
-        self.assertEqual(transcript.format_cost(0.001), "<$0.01")
-        self.assertEqual(transcript.format_duration(""), "0m")
+        from claude_tui_components.utils import format_tokens
+        self.assertEqual(format_tokens(1200), "1.2k")
+        self.assertEqual(calculations.format_cost(0.001), "<$0.01")
+        self.assertEqual(calculations.format_duration(""), "0m")
 
     def test_cache_ratio_and_part(self):
         metrics = {"input_tokens_total": 100, "cache_read_tokens_total": 100}
-        pct, color = transcript.calculate_cache_ratio(metrics)
-        part = transcript.format_cache_part(pct, color)
+        pct, color = calculations.calculate_cache_ratio(metrics)
+        part = calculations.format_cache_part(pct, color)
         self.assertIn("cache", part)
 
     def test_progress_bar_and_sparkline(self):
@@ -146,35 +147,37 @@ class TestFormattingAndRender(unittest.TestCase):
             "recent_tools": ["Edit a.py"],
             "current_turn_file_edits": {"a.py": 2},
         }
+        from statusline_core.display_state import DisplayState
+        ds = DisplayState(
+            model="Sonnet",
+            session_id="abcd1234",
+            cwd="proj",
+            bar="bar",
+            tokens_str="1k",
+            limit_str="200k",
+            metrics=metrics,
+            usage={"five_hour": {"utilization": 10, "resets_at": ""}},
+            compact_prediction="ETA 10 turns",
+            sparkline_part="spark",
+            cost_str="$1.00",
+            duration_str="10m",
+            efficiency_part="90% eff",
+            branch_part="main",
+            cache_part="80% cache",
+            cache_pct=80,
+            cost_per_turn="~$0.50/turn",
+            bar_length=20,
+        )
         with mock.patch("statusline_core.render.is_visible", return_value=True):
-            l1 = render.build_line1_parts(
-                "bar",
-                "1k",
-                "200k",
-                "ETA 10 turns",
-                "Sonnet",
-                "spark",
-                "$1.00",
-                "10m",
-                metrics,
-                "90% eff",
-                "abcd1234",
+            l1 = render.build_line1_parts(ds)
+            l2 = render.build_line2_parts(ds)
+            ds_l3 = DisplayState(
+                metrics=metrics,
+                usage={"seven_day": {"utilization": 50, "resets_at": ""}},
+                bar_length=20,
             )
-            l2 = render.build_line2_parts(
-                {"five_hour": {"utilization": 10, "resets_at": ""}},
-                "proj",
-                "main",
-                metrics,
-                "80% cache",
-                80,
-                "~$0.50/turn",
-                "status",
-            )
-            l3 = render.build_line3_parts(
-                {"seven_day": {"utilization": 50, "resets_at": ""}},
-                metrics,
-            )
-            compact = render.build_compact_line("Sonnet", "bar", "1k", "200k", {})
+            l3 = render.build_line3_parts(ds_l3)
+            compact = render.build_compact_line(ds)
         self.assertTrue(len(l1) > 0)
         self.assertTrue(len(l2) > 0)
         self.assertIsInstance(l3, list)
