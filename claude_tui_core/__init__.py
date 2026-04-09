@@ -18,8 +18,10 @@ from .models import (
 from .settings import load_settings, get_setting, reset_settings_cache
 from .network import (
     fetch_api_status,
-    format_api_status,
     fetch_usage,
+)
+from .formatting import (
+    format_api_status,
     format_usage_session,
     format_usage_weekly,
 )

@@ -191,7 +191,7 @@ class TestApiClientFormatting(unittest.TestCase):
             "components": {"Claude Code API": "major_outage"},
             "incidents": [],
         }
-        with mock.patch("claude_tui_core.network.get_setting", return_value=False):
+        with mock.patch("claude_tui_core.formatting.get_setting", return_value=False):
             out = api_clients.format_api_status(data)
         self.assertIn("outage", out)
 

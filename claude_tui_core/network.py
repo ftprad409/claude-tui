@@ -1,6 +1,6 @@
 """
-Single source of truth for all external HTTP communication.
-Handles status.claude.com and Anthropic OAuth usage API with caching and locking.
+External HTTP communication — fetching, caching, and locking.
+Handles status.claude.com and Anthropic OAuth usage API.
 """
 
 import fcntl
@@ -11,7 +11,6 @@ import ssl
 import subprocess
 import threading
 import time
-from datetime import datetime, timezone
 from typing import IO
 
 from .settings import get_setting
@@ -27,15 +26,13 @@ USAGE_LOCK_PATH = USAGE_CACHE_PATH + ".lock"
 
 # Constants
 APPLICATION_JSON = "application/json"
-UTC_OFFSET = "+00:00"
 
-# ANSI-ish colors (logic only, doesn't import from components to keep core lean)
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-ORANGE = "\033[38;5;208m"
-RED = "\033[91m"
-GRAY = "\033[90m"
-RESET = "\033[0m"
+# Re-export formatting for backward compatibility
+from .formatting import (  # noqa: E402
+    format_api_status,
+    format_usage_session,
+    format_usage_weekly,
+)
 
 
 def _read_json_file(path: str) -> dict | None:
@@ -105,7 +102,7 @@ def _fetch_https_json(
         TimeoutError,
         http.client.HTTPException,
         ssl.SSLError,
-        json.JSONDecodeError,
+        ValueError,
     ):
         return None, None
     finally:
@@ -127,7 +124,6 @@ def fetch_api_status(background=False):
         return cache
 
     if background:
-        # Start background refresh and return stale cache immediately
         t = threading.Thread(
             target=fetch_api_status, kwargs={"background": False}, daemon=True
         )
@@ -175,52 +171,6 @@ def fetch_api_status(background=False):
         _release_lock(lock_fd)
 
 
-def format_api_status(status_data):
-    """Format status data into a colored display string."""
-    if not status_data:
-        return ""
-
-    show_when_ok = get_setting("status", "show_when_operational", default=False)
-    components = status_data.get("components", {})
-    overall = status_data.get("status", "none")
-
-    severity_order = [
-        "operational",
-        "degraded_performance",
-        "partial_outage",
-        "major_outage",
-    ]
-    worst = "operational"
-    worst_name = ""
-
-    for name, st in components.items():
-        if st in severity_order and severity_order.index(st) > severity_order.index(
-            worst
-        ):
-            worst = st
-            worst_name = name
-
-    if worst == "operational" and overall == "none":
-        return f"{GREEN}●{RESET} {GRAY}ok{RESET}" if show_when_ok else ""
-
-    if worst == "degraded_performance":
-        return f"{YELLOW}▲ degraded{RESET}"
-    if worst == "partial_outage":
-        label = "Code partial" if "Code" in worst_name else "partial outage"
-        return f"{ORANGE}▲ {label}{RESET}"
-    if worst == "major_outage":
-        label = "Code outage" if "Code" in worst_name else "outage"
-        return f"{RED}▲ {label}{RESET}"
-
-    if overall == "minor":
-        return f"{YELLOW}▲ degraded{RESET}"
-    if overall in ("major", "critical"):
-        color = ORANGE if overall == "major" else RED
-        return f"{color}▲ outage{RESET}"
-
-    return ""
-
-
 def _load_oauth_token():
     token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
     if token:
@@ -236,7 +186,7 @@ def _load_oauth_token():
             )
             if token:
                 return token
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         pass
 
     # Keychain fallback
@@ -260,10 +210,38 @@ def _load_oauth_token():
             )
             if token:
                 return token
-    except (subprocess.SubprocessError, OSError, json.JSONDecodeError, ValueError):
+    except (subprocess.SubprocessError, OSError, ValueError):
         pass
 
     return None
+
+
+def _build_usage_cache(data):
+    """Build a usage cache dict from API response data."""
+    return {
+        "fetched_at": time.time(),
+        "five_hour": data.get("five_hour", {}),
+        "seven_day": data.get("seven_day", {}),
+        "seven_day_sonnet": data.get("seven_day_sonnet", {}),
+        "extra_usage": data.get("extra_usage", {}),
+        "retry_count": 0,
+        "retry_after": 0,
+    }
+
+
+def _handle_usage_429(cache):
+    """Apply exponential backoff on 429 and persist to disk."""
+    if not cache:
+        cache = {"fetched_at": 0, "retry_count": 0, "retry_after": 0}
+    current_retry = cache.get("retry_count", 0)
+    backoff = min(120 * (2**current_retry), 600)
+    cache["retry_count"] = current_retry + 1
+    cache["retry_after"] = time.time() + backoff
+    try:
+        _write_json_file(USAGE_CACHE_PATH, cache)
+    except OSError:
+        pass
+    return cache
 
 
 def fetch_usage(background=False):
@@ -311,15 +289,7 @@ def fetch_usage(background=False):
             timeout=3,
         )
         if status == 200 and data:
-            fresh = {
-                "fetched_at": time.time(),
-                "five_hour": data.get("five_hour", {}),
-                "seven_day": data.get("seven_day", {}),
-                "seven_day_sonnet": data.get("seven_day_sonnet", {}),
-                "extra_usage": data.get("extra_usage", {}),
-                "retry_count": 0,
-                "retry_after": 0,
-            }
+            fresh = _build_usage_cache(data)
             try:
                 _write_json_file(USAGE_CACHE_PATH, fresh)
             except OSError:
@@ -327,63 +297,8 @@ def fetch_usage(background=False):
             return fresh
 
         if status == 429:
-            if not cache:
-                return None
-            current_retry = cache.get("retry_count", 0)
-            backoff = min(120 * (2**current_retry), 600)
-            cache["retry_count"] = current_retry + 1
-            cache["retry_after"] = time.time() + backoff
-            # Must persist backoff state so other concurrent agent processes
-            # honour the same cooldown window (not just the current process).
-            try:
-                _write_json_file(USAGE_CACHE_PATH, cache)
-            except OSError:
-                pass
-            return cache
+            return _handle_usage_429(cache)
     finally:
         _release_lock(lock_fd)
 
     return cache
-
-
-def _format_reset_countdown(reset_iso: str) -> str:
-    """Format ISO reset timestamp into a compact countdown label."""
-    if not isinstance(reset_iso, str) or not reset_iso:
-        return ""
-    try:
-        reset_dt = datetime.fromisoformat(reset_iso.replace("Z", UTC_OFFSET))
-    except ValueError:
-        return ""
-
-    diff = (reset_dt - datetime.now(timezone.utc)).total_seconds()
-    if diff <= 0:
-        return ""
-
-    h, m = int(diff // 3600), int((diff % 3600) // 60)
-    return f"{h}h{m:02d}m" if h > 0 else f"{m}m"
-
-
-def _format_usage_bar(usage_data, key, pct_label, length=20):
-    """Format a usage window as a progress bar line."""
-    from claude_tui_components.lines import build_bar_line
-
-    if not usage_data:
-        return ""
-    window = usage_data.get(key, {})
-    pct = window.get("utilization", 0)
-    if pct is None:
-        return ""
-
-    ratio = min(pct / 100.0, 1.0)
-    countdown = _format_reset_countdown(window.get("resets_at", ""))
-    return build_bar_line(ratio, length, pct_label=pct_label, icon="⏱" if countdown else "", suffix=countdown)
-
-
-def format_usage_session(usage_data, length=20):
-    """Format session (5-hour) usage for display."""
-    return _format_usage_bar(usage_data, "five_hour", "S", length)
-
-
-def format_usage_weekly(usage_data, length=20):
-    """Format weekly (7-day) usage for display."""
-    return _format_usage_bar(usage_data, "seven_day", "W", length)

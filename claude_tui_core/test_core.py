@@ -103,14 +103,13 @@ class TestNetwork(unittest.TestCase):
         res = format_api_status(status)
         self.assertIn("outage", res.lower())
 
-    @patch("claude_tui_components.widgets.build_progress_bar")
-    def test_format_usage(self, mock_bar):
-        mock_bar.return_value = "[BAR]"
+    def test_format_usage(self):
         usage = {
-            "five_hour": {"utilization": 50.0, "resets_at": "2026-04-08T12:00:00Z"}
+            "five_hour": {"utilization": 50.0, "resets_at": "2099-01-01T00:00:00Z"}
         }
         res = format_usage_session(usage)
-        self.assertIn("[BAR]", res)
+        self.assertIn("S", res)
+        self.assertIn("50%", res)
 
     @patch("claude_tui_core.network._read_json_file")
     @patch("threading.Thread")
