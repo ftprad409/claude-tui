@@ -143,11 +143,11 @@ Customize behavior via `~/.claude/claudeui.json` (hot-reloads, no restart needed
 
 ### [claude_tui_components](./claude_tui_components/)
 
-A centralized UI library containing all shared visual elements (progress bars, sparklines, string truncation utilities, and color sequences). It is dynamically injected via `PYTHONPATH` during subprocess execution, ensuring a single unified true-color aesthetic across the statusline, monitor dashboard, and interactive configurator (mode custom) without code duplication.
+A centralized UI library containing all shared visual elements (progress bars, sparklines, line-level widgets, string truncation utilities, and color sequences). It is dynamically injected via `PYTHONPATH` during subprocess execution, ensuring a single unified true-color aesthetic across the statusline, monitor dashboard, and interactive configurator (mode custom) without code duplication.
 
 ### [claude_tui_core](./claude_tui_core/)
 
-The centralized domain logic layer following SOLID/SRP principles. It manages the single source of truth for Anthropic model data (pricing, context windows), handles all external HTTP communication (status page polling, OAuth usage tracking), and provides a unified configuration loader with high-performance hot-reloading. The network layer uses lock-aware caching with explicit typed exception handling, and model pricing includes deterministic fuzzy aliases for shorthand keys like `opus`, `sonnet3`, and `haiku4`.
+The centralized domain logic layer following SOLID/SRP principles. It manages the single source of truth for Anthropic model data (pricing, context windows), handles all external HTTP communication (status page polling, OAuth usage tracking with User-Agent-aware rate limit handling), provides display formatting for status and usage data, and offers a unified configuration loader with hot-reloading. The network layer uses lock-aware caching with exponential backoff, and model pricing includes deterministic fuzzy aliases for shorthand keys like `opus`, `sonnet3`, and `haiku4`.
 
 ### [claude-code-statusline](./claude-code-statusline/)
 
@@ -156,14 +156,14 @@ Real-time status bar for Claude Code with context sparkline, session cost, cache
 For troubleshooting refresh/caching/parsing behavior, you can enable statusline diagnostics with `STATUSLINE_DEBUG=1` (logs to stderr). See the [statusline README](./claude-code-statusline/README.md) for details.
 
 ```
-  0110100 Opus 4.6 │ ████████████████████ 42% 112k/1.0M │ ~24 turns left │ ▁▂▃▅▆▇↓▁▃▅ │ $2.34 │ 12m │ 0x compact │ #a1b2c3d4
-  1001011 ████████████████████ 15%  ↻ 2h   │ main +42 -17 │ 18 turns │ 5 files │ 0 err │ 82% cache │ 4x think │ ~$0.13/turn
-  0110010 ████████████████████ 73%w  ↻ 3h   │ read statusline.py → edit statusline.py → bash python3 → edit README.md │ statusline.py×3 README.md×1
+  0110100 ████████████████████┆ C 26% ⚡268.2k/1.0M ⋮ ETA 408 turns ⋮ CMP 8x ⋮ △ partial outage
+  1001011 ████████████████████ S  4% ⏱ 4h42m ⋮ AGT 75
+  0110010 ████████████████████ W 83% ⏱ 44h42m ⋮ bash docker → agent
 ```
 
-Line 1: Context bar (progress + percentage + tokens)  
-Line 2: Session usage bar (5-hour limit) + project telemetry  
-Line 3: Weekly usage bar + tool trace + file edits
+Line 1: Context bar (`C` percentage + `⚡` tokens/limit) + compaction ETA + status  
+Line 2: Session usage bar (`S` 5-hour limit + `⏱` countdown) + telemetry chips  
+Line 3: Weekly usage bar (`W` 7-day limit + `⏱` countdown) + tool trace + file edits
 
 ### [claude-code-session-stats](./claude-code-session-stats/)
 
@@ -252,7 +252,7 @@ Custom slash commands for deep session analytics on demand. Install to `~/.claud
 
 Live session dashboard for a separate terminal. Live duration, activity status, cost burn rate, tool trace, error details, auto-follow, and interactive hotkeys — all in the alternate screen buffer.
 
-![Session Dashboard](assets/session-dashboard.png)
+![Monitor Dashboard](assets/monitor-demo.png)
 
 ```bash
 python3 claude-code-monitor/monitor.py           # auto-detect active session
