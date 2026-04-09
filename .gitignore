@@ -8,6 +8,12 @@ __pycache__/
 .venv/
 venv/
 
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
 # IDE
 .idea/
 .vscode/
