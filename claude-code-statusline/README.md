@@ -124,6 +124,29 @@ Claude Code passes session metadata as JSON via stdin to status line commands. T
 
 Unknown models fall back to Sonnet pricing.
 
+## Customize
+
+Toggle individual components, pick a widget, or apply a preset — all from an interactive TUI:
+
+```bash
+claudetui mode custom
+```
+
+<p align="center">
+  <img src="../assets/configurator.png" alt="Statusline Configurator" width="600">
+</p>
+
+Or use CLI flags for non-interactive configuration:
+
+```bash
+claudetui mode custom -p focused          # apply preset
+claudetui mode custom -w hex              # change widget
+claudetui mode custom --hide model,cost   # hide specific components
+claudetui mode custom -l                  # list current config
+```
+
+Three presets included: **all** (everything visible), **minimal** (essentials only), **focused** (hides noise like model, cost, session ID).
+
 ## Widgets
 
 The left-side animation area is pluggable. Set the `STATUSLINE_WIDGET` env var to switch:

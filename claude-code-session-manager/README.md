@@ -52,10 +52,28 @@ Launches Claude Code with `--resume` for the matched session.
 ### `diff` — Compare two sessions
 
 ```bash
-python3 session-manager.py diff abc12345 def67890
+python3 session-manager.py diff a1b2c3d4 13a4b5c6
 ```
 
 Side-by-side comparison of two sessions: model, branch, duration, messages, compactions, and cost. Highlights differences.
+
+```
+  Session Comparison
+  ────────────────────────────────────────────────────────────
+                                Session A           Session B
+  ────────────────────────────────────────────────────────────
+  ID                             a1b2c3d4            13a4b5c6
+  Project                      my-web-app          my-web-app
+  Model                          opus-4-6            opus-4-6
+  Branch                     feature/auth   feature/dashboard
+  Date                         2026-03-08          2026-03-03
+  Duration                           45m               5h 22m
+  Messages                             34                 287
+  Compactions                           0                   2
+  Cost                              $2.31              $45.80
+  ────────────────────────────────────────────────────────────
+  Cost difference      +$43.49
+```
 
 ### `export` — Export session transcript
 
