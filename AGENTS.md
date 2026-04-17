@@ -49,3 +49,8 @@ To test statusline locally, edit `~/.claude/settings.json` to point to your repo
 - Each tool in its own directory, self-contained with README
 - Config: `~/.claude/claudeui.json` (hot-reloads, no restart needed)
 - Tests: `claude_tui_core/test_core.py` (unit tests for core library)
+
+## Personal Notes
+
+- Forked for learning purposes; upstream is slima4/claude-tui
+- Before pulling upstream changes, check `claude_tui_core/models.py` for pricing drift — that file changes often
