@@ -30,6 +30,8 @@ Real-time status bar for Claude Code. Single-file script.
 
 > **Personal note:** I prefer running in `compact` mode by default. Set default mode in `~/.claude/claudeui.json` under `"default_mode": "compact"`.
 
+> **Personal note:** I also set `"widget": "bars"` in my config — I find the bars widget easier to read at a glance than `matrix` or `hex`.
+
 ### claude-code-session-stats
 
 Post-session analytics tool. Single-file script.
@@ -52,9 +54,4 @@ Custom slash commands for in-session analytics. Markdown files installed to `~/.
 
 - Commands: `session` (full report), `cost` (spending breakdown), `perf` (tool efficiency), `context` (growth curve)
 - Each command instructs Claude to read the current transcript JSONL and present formatted analysis
-- No external dependencies — commands are pure markdown prompts
-- Transcript path resolved via: `~/.claude/projects/$(pwd | sed 's|/|-|g; s|^-||')/*.jsonl`
-
-### claude-code-monitor
-
-Live session da
+- No external dependencies — commands are pure 
