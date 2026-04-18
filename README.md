@@ -13,6 +13,8 @@ A real-time **statusline** for Claude Code — context, cost, usage bars, sparkl
 
 **Website:** [slima4.github.io/claude-tui](https://slima4.github.io/claude-tui/)
 
+> **Personal fork note:** I use this primarily on Linux with zsh. If you're in the same setup, the script install works great — no need for Homebrew.
+
 ---
 
 ## Statusline
@@ -87,17 +89,8 @@ curl -sSL https://raw.githubusercontent.com/slima4/claude-tui/main/uninstall.sh 
 ClaudeTUI ships a few companion utilities alongside the statusline. Each lives in its own directory with its own README:
 
 | Tool | What it does |
-|------|--------------|
+|------|---------------|
 | [claude-code-statusline](./claude-code-statusline/) | The statusline itself — full docs, widgets, color thresholds |
 | [claude-code-monitor](./claude-code-monitor/) | Live session dashboard for a second terminal — `claudetui monitor` |
 | [claude-code-sniffer](./claude-code-sniffer/) | API call interceptor proxy — `claudetui sniffer` / `claudetui sniff` |
-| [claude-code-session-stats](./claude-code-session-stats/) | Post-session analytics — `claudetui stats` |
-| [claude-code-session-manager](./claude-code-session-manager/) | Browse, compare, resume, and export sessions — `claudetui sessions list` |
-| [claude-code-hooks](./claude-code-hooks/) | Hooks for automatic in-session context: hotspots, reverse deps, churn |
-| [claude-code-commands](./claude-code-commands/) | Custom slash commands: `/tui:session`, `/tui:cost`, `/tui:perf`, `/tui:context` |
-| [claude_tui_core](./claude_tui_core/) | Shared domain logic — models, pricing, network, settings |
-| [claude_tui_components](./claude_tui_components/) | Shared UI library — progress bars, sparklines, widgets, colors |
-
-## License
-
-MIT
+| [claude-code-session-stats](./claude-code-session-stats/) | Post-session 
