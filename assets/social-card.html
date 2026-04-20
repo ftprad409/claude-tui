@@ -8,7 +8,8 @@
     width: 1280px;
     height: 640px;
     overflow: hidden;
-    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    /* prefer JetBrains Mono if available, fallback chain */
+    font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
     background: #0a0e14;
     display: flex;
     flex-direction: column;
@@ -128,16 +129,4 @@
   <div class="tagline">Real-time dashboard for Claude Code</div>
 
   <div class="terminal-box">
-    <div class="line"><span class="green-dark">0</span><span class="green-dim">1</span><span class="green">1</span><span class="green-dark">0</span><span class="green-dim">1</span><span class="green-dark">0</span><span class="green">0</span> <span class="bold magenta">Opus 4.6</span> <span class="dim">|</span> <span class="green">████████</span><span class="dim">░░░░░░░░░░░░</span> <span class="cyan">42%</span> <span class="cyan">65.5k</span><span class="dim">/200.0k</span> <span class="dim">|</span> <span class="green">~24 turns left</span> <span class="dim">|</span> <span class="green">▁</span><span class="green">▂</span><span class="yellow">▃</span><span class="yellow">▅</span><span class="orange">▆</span><span class="orange">▇</span><span class="dim">↓</span><span class="green">▁</span><span class="green">▃</span><span class="yellow">▅</span> <span class="dim">|</span> <span class="yellow">$2.34</span> <span class="dim">|</span> <span class="bright">12m</span> <span class="dim">|</span> <span class="cyan">0</span><span class="dim">x compact</span></div>
-    <div class="line"><span class="green-dark">1</span><span class="green-dim">0</span><span class="green-dark">0</span><span class="green">1</span><span class="green-dark">0</span><span class="green-dim">1</span><span class="green">1</span> <span class="green">my-project</span> <span class="dim">|</span> <span class="magenta">main</span> <span class="green">+42</span> <span class="red">-17</span> <span class="dim">|</span> <span class="cyan">18</span> <span class="dim">turns</span> <span class="dim">|</span> <span class="cyan">5</span> <span class="dim">files</span> <span class="dim">|</span> <span class="cyan">0</span> <span class="dim">err</span> <span class="dim">|</span> <span class="green">82%</span> <span class="dim">cache</span> <span class="dim">|</span> <span class="cyan">4</span><span class="dim">x think</span> <span class="dim">|</span> <span class="dim">~</span><span class="yellow">$0.13</span><span class="dim">/turn</span></div>
-    <div class="line"><span class="green-dim">0</span><span class="green">1</span><span class="green-dark">1</span><span class="green-dim">0</span><span class="green-dark">0</span><span class="green">1</span><span class="green-dark">0</span> <span class="dim">read</span> <span class="green">config.ts</span> <span class="dim">→</span> <span class="dim">edit</span> <span class="green">config.ts</span> <span class="dim">→</span> <span class="dim">bash</span> <span class="green">npm test</span> <span class="dim">→</span> <span class="dim">edit</span> <span class="green">README.md</span> <span class="dim">|</span> <span class="yellow">config.ts</span><span class="dim">×2</span> <span class="yellow">README.md</span><span class="dim">×1</span></div>
-  </div>
-
-  <div class="footer">
-    <span>statusline</span> · <span>monitor</span> · <span>stats</span> · <span>hooks</span> · <span>commands</span>
-    <div style="flex: 1"></div>
-    Python 3.13+ · stdlib only · no dependencies
-  </div>
-
-</body>
-</html>
+    <div class="line"><span class="green-dark">0</span><span class="green-dim">1</span><span class="green">1</span><span class="green-dark">0</span><span class="green-dim">1</span><span class="green-dark">0</span><span class="green">0</span> <span class="bold magenta">Opus 4.6</span> <span class="dim">|</span> <span class="green">████████</span><span class="dim">░░░░░░░░░░░░</span> <
