@@ -32,6 +32,8 @@ Real-time status bar for Claude Code. Single-file script.
 
 > **Personal note:** I also set `"widget": "bars"` in my config — I find the bars widget easier to read at a glance than `matrix` or `hex`.
 
+> **Personal note:** I set `"show_thinking": false` in my config — thinking block indicators clutter the compact statusline for me and I rarely need to know when the model is in an extended thinking step.
+
 ### claude-code-session-stats
 
 Post-session analytics tool. Single-file script.
@@ -53,5 +55,4 @@ Session browser and manager. Single-file script.
 Custom slash commands for in-session analytics. Markdown files installed to `~/.claude/commands/tui/`.
 
 - Commands: `session` (full report), `cost` (spending breakdown), `perf` (tool efficiency), `context` (growth curve)
-- Each command instructs Claude to read the current transcript JSONL and present formatted analysis
-- No external dependencies — commands are pure 
+- Each
