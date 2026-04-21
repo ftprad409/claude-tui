@@ -54,3 +54,5 @@ To test statusline locally, edit `~/.claude/settings.json` to point to your repo
 
 - Forked for learning purposes; upstream is slima4/claude-tui
 - Before pulling upstream changes, check `claude_tui_core/models.py` for pricing drift — that file changes often
+- To sync with upstream: `git fetch upstream && git merge upstream/main` (set up with `git remote add upstream https://github.com/slima4/claude-tui`)
+- I keep a local branch `personal` for my own tweaks so `main` stays close to upstream for easy diffing
