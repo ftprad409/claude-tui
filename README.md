@@ -13,7 +13,7 @@ A real-time **statusline** for Claude Code — context, cost, usage bars, sparkl
 
 **Website:** [slima4.github.io/claude-tui](https://slima4.github.io/claude-tui/)
 
-> **Personal fork note:** I use this primarily on Linux with zsh. If you're in the same setup, the script install works great — no need for Homebrew.
+> **Personal fork note:** I use this primarily on Linux with zsh. If you're in the same setup, the script install works great — no need for Homebrew. I default to `compact` mode since it's less intrusive in my terminal workflow.
 
 ---
 
@@ -92,5 +92,4 @@ ClaudeTUI ships a few companion utilities alongside the statusline. Each lives i
 |------|---------------|
 | [claude-code-statusline](./claude-code-statusline/) | The statusline itself — full docs, widgets, color thresholds |
 | [claude-code-monitor](./claude-code-monitor/) | Live session dashboard for a second terminal — `claudetui monitor` |
-| [claude-code-sniffer](./claude-code-sniffer/) | API call interceptor proxy — `claudetui sniffer` / `claudetui sniff` |
-| [claude-code-session-stats](./claude-code-session-stats/) | Post-session 
+| [claude-code-sniffer](./claude-code-sniffe
