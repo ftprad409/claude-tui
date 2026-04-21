@@ -54,7 +54,7 @@ Issues = "https://github.com/slima4/claude-tui/issues"
 packages = ["claude_tui"]
 
 [tool.ruff]
-line-length = 100
+line-length = 88  # prefer black-compatible line length over the upstream 100
 target-version = "py310"
 
 [tool.ruff.lint]
