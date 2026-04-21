@@ -126,7 +126,8 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
+    /* align messages to top so content reads naturally top-to-bottom */
+    justify-content: flex-start;
   }
 
   .cc-msg {
@@ -154,7 +155,3 @@
     margin: 4px 0;
     font-size: 11px;
     color: #6b7a8d;
-  }
-
-  .cc-tool .t-name { color: #03a062; }
-  .cc-tool .t-file { co
