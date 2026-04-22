@@ -1,3 +1,5 @@
+# ClaudeTUI
+
 <p align="center">
   <img src="assets/logo.svg" alt="ClaudeTUI" width="720">
 </p>
@@ -13,7 +15,7 @@ A real-time **statusline** for Claude Code — context, cost, usage bars, sparkl
 
 **Website:** [slima4.github.io/claude-tui](https://slima4.github.io/claude-tui/)
 
-> **Personal fork note:** I use this primarily on Linux with zsh. If you're in the same setup, the script install works great — no need for Homebrew. I default to `compact` mode since it's less intrusive in my terminal workflow. I also set `CLAUDETUI_COST_WARN=2.00` and `CLAUDETUI_COST_ALERT=5.00` in my shell config to get earlier cost warnings than the defaults.
+> **Personal fork note:** I use this primarily on Linux with zsh. If you're in the same setup, the script install works great — no need for Homebrew. I default to `compact` mode since it's less intrusive in my terminal workflow. I also set `CLAUDETUI_COST_WARN=2.00` and `CLAUDETUI_COST_ALERT=5.00` in my shell config to get earlier cost warnings than the defaults. I also add `CLAUDETUI_REFRESH_INTERVAL=2` to reduce the update frequency a bit — the default feels slightly too fast on my machine.
 
 ---
 
@@ -90,5 +92,4 @@ ClaudeTUI ships a few companion utilities alongside the statusline. Each lives i
 
 | Tool | What it does |
 |------|---------------|
-| [claude-code-statusline](./claude-code-statusline/) | The statusline itself — full docs, widgets, color thresholds |
-| [claude-code-monitor](./claude-code-monitor/) | Live session dashboard for a secon
+| [claude-code-statusline](./claude-code-statusline/) | The status
